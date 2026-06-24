@@ -1,6 +1,7 @@
 /target/
 **/*.rs.bk
 /dist/
+dart/.dart_tool/
 
 # Fixture weights (run scripts/download_all_packs.ps1 or per-pack download scripts)
 crates/infer-core/tests/fixtures/**/det.onnx
