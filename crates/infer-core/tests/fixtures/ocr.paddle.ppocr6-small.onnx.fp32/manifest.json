@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "id": "ocr.paddle.ppocr6-small.onnx.fp32",
+  "kind": "ocr",
+  "family": "paddle",
+  "version": 6,
+  "format": "onnx",
+  "quant": "fp32",
+  "files": {
+    "det": "det.onnx",
+    "rec": "rec.onnx",
+    "dict": "ppocrv6_dict.txt"
+  },
+  "runtime": "onnxruntime",
+  "inputs": {
+    "det_max_side": 960,
+    "rec_height": 48
+  },
+  "detection": {
+    "score_threshold": 0.2,
+    "box_threshold": 0.45,
+    "unclip_ratio": 1.4
+  },
+  "license": {
+    "spdx": "Apache-2.0",
+    "files": [
+      "LICENSE",
+      "NOTICE"
+    ],
+    "upstream": {
+      "name": "PaddleOCR / PP-OCRv6",
+      "url": "https://github.com/PaddlePaddle/PaddleOCR",
+      "version": "PP-OCRv6_small"
+    }
+  }
+}

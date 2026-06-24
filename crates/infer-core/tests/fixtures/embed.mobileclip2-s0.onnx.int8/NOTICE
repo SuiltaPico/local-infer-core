@@ -1,0 +1,6 @@
+MobileCLIP2-S0 vision encoder (ONNX conversion)
+Upstream: https://github.com/apple/ml-mobileclip
+Converted ONNX: https://huggingface.co/plhery/mobileclip2-onnx
+
+See upstream repository LICENSE for terms governing the original weights.
+This pack repackages the converted ONNX file without semantic modification.

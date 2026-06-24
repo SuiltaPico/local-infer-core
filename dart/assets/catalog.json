@@ -1,0 +1,40 @@
+{
+  "packs": [
+    {
+      "id": "ocr.paddle.ppocr6-tiny.onnx.fp32",
+      "size_bytes": 0,
+      "sha256": "",
+      "bundled_asset": "assets/packs/ocr.paddle.ppocr6-tiny.onnx.fp32.zip"
+    },
+    {
+      "id": "ocr.paddle.ppocr6-small.onnx.fp32",
+      "size_bytes": 0,
+      "sha256": ""
+    },
+    {
+      "id": "ocr.paddle.ppocr6-medium.onnx.fp32",
+      "size_bytes": 0,
+      "sha256": ""
+    },
+    {
+      "id": "embed.mobileclip2-s0.onnx.int8",
+      "size_bytes": 0,
+      "sha256": ""
+    },
+    {
+      "id": "embed.mobileclip2-s0.onnx.fp32",
+      "size_bytes": 0,
+      "sha256": ""
+    },
+    {
+      "id": "icons.bundled.v1.mobileclip2-s0.int8",
+      "size_bytes": 0,
+      "sha256": ""
+    },
+    {
+      "id": "icons.bundled.v1.mobileclip2-s0.fp32",
+      "size_bytes": 0,
+      "sha256": ""
+    }
+  ]
+}

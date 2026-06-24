@@ -1,0 +1,7 @@
+PP-OCRv6 (PaddleOCR)
+Copyright (c) PaddlePaddle Authors
+Licensed under the Apache License, Version 2.0
+https://github.com/PaddlePaddle/PaddleOCR
+
+This pack contains ONNX inference weights from PaddlePaddle official channels.
+No modification to model semantics; repackaged for local-infer-core manifest layout.

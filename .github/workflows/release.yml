@@ -1,0 +1,83 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      skip_medium:
+        description: 'Skip PP-OCRv6 medium pack (large download)'
+        type: boolean
+        default: false
+      skip_icons:
+        description: 'Skip icons.bundled index build (slow)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  release-windows-x64:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.95.0'
+
+      - name: Download model packs
+        shell: pwsh
+        run: |
+          $args = @()
+          if ('${{ inputs.skip_medium }}' -eq 'true') { $args += '-SkipMedium' }
+          if ('${{ inputs.skip_icons }}' -eq 'true') { $args += '-SkipIcons' }
+          ./scripts/download_all_packs.ps1 @args
+
+      - name: Build infer-core-ffi
+        run: cargo build -p infer-core-ffi --release
+
+      - name: Package infer_core.dll
+        shell: pwsh
+        run: |
+          $out = "dist/infer-core-windows-x86_64"
+          New-Item -ItemType Directory -Force -Path "$out/lib" | Out-Null
+          Copy-Item target/release/infer_core.dll "$out/lib/infer_core.dll"
+          Compress-Archive -Path "$out/*" -DestinationPath dist/infer-core-windows-x86_64.zip -Force
+
+      - name: Package all model packs
+        shell: pwsh
+        run: ./tools/pack/pack-all.ps1 -WriteSha256 -UpdateCatalog
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          body: |
+            ## infer-core ${{ github.ref_name }}
+
+            ### Native library
+            - `infer-core-windows-x86_64.zip` — `lib/infer_core.dll`
+
+            ### Model packs (manifest + LICENSE + weights)
+            - `ocr.paddle.ppocr6-tiny.onnx.fp32` — default chat OCR (~8 MB)
+            - `ocr.paddle.ppocr6-small.onnx.fp32` — optional upgrade
+            - `ocr.paddle.ppocr6-medium.onnx.fp32` — optional upgrade
+            - `embed.mobileclip2-s0.onnx.int8` — default icon embedding (int8 索引配套)
+            - `embed.mobileclip2-s0.onnx.fp32` — embed 精度优先（可选）
+            - `icons.bundled.v1.mobileclip2-s0.int8` / `.fp32` — bundled icon index
+
+            SHA256 checksums: `SHA256SUMS.txt`
+          files: |
+            dist/infer-core-windows-x86_64.zip
+            dist/ocr.paddle.ppocr6-tiny.onnx.fp32.zip
+            dist/ocr.paddle.ppocr6-small.onnx.fp32.zip
+            dist/ocr.paddle.ppocr6-medium.onnx.fp32.zip
+            dist/embed.mobileclip2-s0.onnx.int8.zip
+            dist/embed.mobileclip2-s0.onnx.fp32.zip
+            dist/icons.bundled.v1.mobileclip2-s0.int8.zip
+            dist/icons.bundled.v1.mobileclip2-s0.fp32.zip
+            dist/SHA256SUMS.txt

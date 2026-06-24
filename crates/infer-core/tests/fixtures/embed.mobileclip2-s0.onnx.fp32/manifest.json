@@ -1,0 +1,30 @@
+{
+  "schema": 1,
+  "id": "embed.mobileclip2-s0.onnx.fp32",
+  "kind": "embed",
+  "family": "mobileclip2",
+  "format": "onnx",
+  "quant": "fp32",
+  "files": {
+    "vision": "vision.onnx"
+  },
+  "dim": 512,
+  "preprocess": {
+    "input_size": 256,
+    "layout": "NCHW",
+    "normalize": "mobileclip2"
+  },
+  "runtime": "onnxruntime",
+  "license": {
+    "spdx": "SEE LICENSE",
+    "files": [
+      "LICENSE",
+      "NOTICE"
+    ],
+    "upstream": {
+      "name": "MobileCLIP2-S0",
+      "url": "https://github.com/apple/ml-mobileclip",
+      "component": "vision encoder weights (converted ONNX)"
+    }
+  }
+}

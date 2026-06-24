@@ -1,0 +1,38 @@
+{
+  "schema": 1,
+  "id": "icons.bundled.v1.mobileclip2-s0.int8",
+  "kind": "icon_index",
+  "embed_model_id": "embed.mobileclip2-s0.onnx.int8",
+  "files": {
+    "index": "embeddings.bin"
+  },
+  "namespaces": ["fa", "fluent", "mdi", "tabler"],
+  "count": 7447,
+  "index_format": "mcl2-v2",
+  "license": {
+    "spdx": "SEE NOTICE",
+    "files": ["LICENSE", "NOTICE"],
+    "upstream": [
+      {
+        "name": "Material Design Icons",
+        "spdx": "Apache-2.0",
+        "url": "https://github.com/Templarian/MaterialDesign-SVG"
+      },
+      {
+        "name": "Tabler Icons",
+        "spdx": "MIT",
+        "url": "https://github.com/tabler/tabler-icons"
+      },
+      {
+        "name": "Fluent UI System Icons",
+        "spdx": "MIT",
+        "url": "https://github.com/microsoft/fluentui-system-icons"
+      },
+      {
+        "name": "Font Awesome Free",
+        "spdx": "SEE NOTICE",
+        "url": "https://fontawesome.com/license/free"
+      }
+    ]
+  }
+}

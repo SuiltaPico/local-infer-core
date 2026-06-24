@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://local-infer-core/manifest.v1.json",
+  "title": "local-infer-core manifest v1",
+  "type": "object",
+  "required": ["schema", "id", "kind", "files", "license"],
+  "properties": {
+    "schema": { "const": 1 },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*$"
+    },
+    "kind": {
+      "enum": ["ocr", "embed", "icon_index"]
+    },
+    "family": { "type": "string" },
+    "version": { "type": "integer", "minimum": 1 },
+    "format": { "enum": ["onnx", "mnn"] },
+    "quant": { "type": "string" },
+    "files": { "type": "object", "minProperties": 1 },
+    "runtime": { "type": "string" },
+    "inputs": { "type": "object" },
+    "detection": { "type": "object" },
+    "dim": { "type": "integer" },
+    "embed_model_id": { "type": "string" },
+    "license": {
+      "type": "object",
+      "required": ["spdx", "files", "upstream"],
+      "properties": {
+        "spdx": { "type": "string", "minLength": 1 },
+        "files": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1
+        },
+        "upstream": {}
+      }
+    }
+  },
+  "additionalProperties": true
+}

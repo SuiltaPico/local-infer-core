@@ -1,0 +1,11 @@
+Bundled open-source icon embedding index (icons.bundled.v1.*)
+
+Icon artwork sources (see manifest license.upstream for SPDX):
+
+- Material Design Icons — Apache-2.0 — https://github.com/Templarian/MaterialDesign-SVG
+- Tabler Icons — MIT — https://github.com/tabler/tabler-icons
+- Fluent UI System Icons — MIT — https://github.com/microsoft/fluentui-system-icons
+- Font Awesome Free — see https://fontawesome.com/license/free
+
+embeddings.bin is derived from rasterized PNG templates embedded with MobileCLIP2-S0.
+Index format: MCL2 v1 (fp32) or v2 (int8 per-vector scale).

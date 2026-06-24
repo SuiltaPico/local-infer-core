@@ -1,0 +1,11 @@
+/target/
+**/*.rs.bk
+/dist/
+
+# Fixture weights (run scripts/download_all_packs.ps1 or per-pack download scripts)
+crates/infer-core/tests/fixtures/**/det.onnx
+crates/infer-core/tests/fixtures/**/rec.onnx
+crates/infer-core/tests/fixtures/**/ppocrv6*.txt
+crates/infer-core/tests/fixtures/**/vision.onnx
+crates/infer-core/tests/fixtures/**/embeddings.bin
+crates/infer-core/tests/fixtures/sample_ocr.jpg
