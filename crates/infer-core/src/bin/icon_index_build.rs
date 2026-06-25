@@ -7,10 +7,10 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 
 use image::DynamicImage;
-use infer_core::embed::preprocess::template_png_to_rgb256;
-use infer_core::embed::{EmbedEngine, EMBED_DIM, INPUT_SIZE};
-use infer_core::icon_index::{EmbeddingIndex, IndexStorageFormat};
-use infer_core::runtime::RuntimeConfig;
+use infer_core_lib::embed::preprocess::template_png_to_rgb256;
+use infer_core_lib::embed::{EmbedEngine, EMBED_DIM, INPUT_SIZE};
+use infer_core_lib::icon_index::{EmbeddingIndex, IndexStorageFormat};
+use infer_core_lib::runtime::RuntimeConfig;
 use rayon::prelude::*;
 
 #[derive(Debug, Clone)]

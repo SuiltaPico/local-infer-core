@@ -1,103 +1,10 @@
-use std::path::Path;
-
-use image::RgbImage;
-use ort::session::Session;
-use ort::value::Tensor;
-
-use crate::error::{InferError, Result};
-use crate::manifest::Manifest;
-use crate::runtime::{self, RuntimeConfig};
-
 pub mod preprocess;
 
 pub const INPUT_SIZE: u32 = 256;
 pub const EMBED_DIM: usize = 512;
 
-pub struct EmbedEngine {
-    session: Session,
-    input_name: String,
-    output_name: String,
-}
-
-impl EmbedEngine {
-    pub fn from_manifest(
-        pack_dir: &Path,
-        manifest: &Manifest,
-        runtime_config: &RuntimeConfig,
-    ) -> Result<Self> {
-        let vision = manifest.file_path(pack_dir, "vision")?;
-        Self::load(&vision, runtime_config)
-    }
-
-    pub fn load(model_path: &Path, runtime_config: &RuntimeConfig) -> Result<Self> {
-        if !model_path.is_file() {
-            return Err(InferError::Embed(format!(
-                "vision model not found: {}",
-                model_path.display()
-            )));
-        }
-
-        let mut builder = Session::builder().map_err(|e| InferError::Embed(e.to_string()))?;
-        builder = runtime::apply_session_builder(builder, "embed", runtime_config)?;
-        let session = builder
-            .commit_from_file(model_path)
-            .map_err(|e| InferError::Embed(e.to_string()))?;
-
-        let input_name = session
-            .inputs()
-            .first()
-            .ok_or_else(|| InferError::Embed("ONNX model has no inputs".into()))?
-            .name()
-            .to_string();
-        let output_name = session
-            .outputs()
-            .first()
-            .ok_or_else(|| InferError::Embed("ONNX model has no outputs".into()))?
-            .name()
-            .to_string();
-
-        Ok(Self {
-            session,
-            input_name,
-            output_name,
-        })
-    }
-
-    pub fn embed_rgb256(&mut self, rgb: &RgbImage) -> Result<Vec<f32>> {
-        let tensor = rgb256_to_nchw(rgb);
-        self.embed_nchw(&tensor)
-    }
-
-    pub fn embed_nchw(&mut self, nchw: &[f32]) -> Result<Vec<f32>> {
-        let expected = 3 * INPUT_SIZE as usize * INPUT_SIZE as usize;
-        if nchw.len() != expected {
-            return Err(InferError::Embed(format!(
-                "expected {expected} floats for NCHW input, got {}",
-                nchw.len()
-            )));
-        }
-
-        let input = Tensor::from_array((
-            [1i64, 3, INPUT_SIZE as i64, INPUT_SIZE as i64],
-            nchw.to_vec(),
-        ))
-        .map_err(|e| InferError::Embed(e.to_string()))?;
-
-        let outputs = self
-            .session
-            .run(ort::inputs![self.input_name.as_str() => input])
-            .map_err(|e| InferError::Embed(e.to_string()))?;
-
-        let (_shape, data) = outputs[self.output_name.as_str()]
-            .try_extract_tensor::<f32>()
-            .map_err(|e| InferError::Embed(e.to_string()))?;
-
-        finalize_embedding(data.to_vec())
-    }
-}
-
 /// Convert RGB 256×256 to NCHW float tensor in [0, 1].
-pub fn rgb256_to_nchw(rgb: &RgbImage) -> Vec<f32> {
+pub fn rgb256_to_nchw(rgb: &image::RgbImage) -> Vec<f32> {
     debug_assert_eq!(rgb.dimensions(), (INPUT_SIZE, INPUT_SIZE));
     let mut out = vec![0.0f32; 3 * INPUT_SIZE as usize * INPUT_SIZE as usize];
     let plane = (INPUT_SIZE * INPUT_SIZE) as usize;
@@ -123,7 +30,9 @@ pub fn l2_normalize(v: &mut [f32]) -> f32 {
     norm
 }
 
-pub fn finalize_embedding(mut embedding: Vec<f32>) -> Result<Vec<f32>> {
+pub fn finalize_embedding(mut embedding: Vec<f32>) -> crate::error::Result<Vec<f32>> {
+    use crate::error::InferError;
+
     if embedding.len() > EMBED_DIM {
         embedding.truncate(EMBED_DIM);
     }
@@ -145,6 +54,16 @@ pub fn cosine(a: &[f32], b: &[f32]) -> f64 {
         .sum()
 }
 
+#[cfg(feature = "backend-ort")]
+mod ort;
+#[cfg(feature = "backend-ort")]
+pub use ort::EmbedEngine;
+
+#[cfg(all(feature = "backend-mnn", not(feature = "backend-ort")))]
+mod mnn;
+#[cfg(all(feature = "backend-mnn", not(feature = "backend-ort")))]
+pub use mnn::EmbedEngine;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -152,7 +71,7 @@ mod tests {
 
     #[test]
     fn rgb256_tensor_range() {
-        let rgb = RgbImage::from_pixel(INPUT_SIZE, INPUT_SIZE, Rgb([128, 64, 32]));
+        let rgb = image::RgbImage::from_pixel(INPUT_SIZE, INPUT_SIZE, Rgb([128, 64, 32]));
         let tensor = rgb256_to_nchw(&rgb);
         assert!((tensor[0] - 128.0 / 255.0).abs() < 1e-6);
         assert_eq!(tensor.len(), 3 * INPUT_SIZE as usize * INPUT_SIZE as usize);

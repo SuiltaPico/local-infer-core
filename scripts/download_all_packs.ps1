@@ -2,6 +2,8 @@
 param(
     [switch]$SkipMedium,
     [switch]$SkipIcons,
+    [switch]$SkipMnn,
+    [switch]$ForceMnn,
     [string]$UiExtractorRoot = (Join-Path (Split-Path $PSScriptRoot -Parent) "..\ui-extractor")
 )
 
@@ -19,6 +21,14 @@ Write-Host "=== MobileCLIP2 embed packs ==="
 if (-not $SkipIcons) {
     Write-Host "=== icons.bundled packs (this may take several minutes) ==="
     & (Join-Path $RepoRoot "tools\icon-index\build_bundled.ps1") -Quant all -UiExtractorRoot $UiExtractorRoot
+}
+
+if (-not $SkipMnn) {
+    Write-Host "=== MNN packs (ONNX -> MNN conversion) ==="
+    $mnnBuildArgs = @{}
+    if ($SkipMedium) { $mnnBuildArgs.SkipMedium = $true }
+    if ($ForceMnn) { $mnnBuildArgs.Force = $true }
+    & (Join-Path $RepoRoot "scripts\build_all_mnn_packs.ps1") @mnnBuildArgs
 }
 
 Write-Host "All requested packs ready."

@@ -1,17 +1,17 @@
 {
   "schema": 1,
-  "id": "ocr.paddle.ppocr6-tiny.onnx.int8",
+  "id": "ocr.paddle.ppocr6-small.mnn.fp32",
   "kind": "ocr",
   "family": "paddle",
   "version": 6,
-  "format": "onnx",
-  "quant": "int8",
+  "format": "mnn",
+  "quant": "fp32",
   "files": {
-    "det": "det.onnx",
-    "rec": "rec.onnx",
-    "dict": "ppocrv6_tiny_dict.txt"
+    "det": "det.mnn",
+    "rec": "rec.mnn",
+    "dict": "ppocrv6_dict.txt"
   },
-  "runtime": "onnxruntime",
+  "runtime": "mnn",
   "inputs": {
     "det_max_side": 960,
     "rec_height": 48
@@ -30,13 +30,7 @@
     "upstream": {
       "name": "PaddleOCR / PP-OCRv6",
       "url": "https://github.com/PaddlePaddle/PaddleOCR",
-      "version": "PP-OCRv6_tiny"
+      "version": "PP-OCRv6_small"
     }
-  },
-  "runtime_hint": {
-    "ep": [
-      "cpu"
-    ],
-    "reason": "tiny model, cpu_ok"
   }
 }

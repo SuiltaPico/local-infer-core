@@ -1,12 +1,38 @@
+# Rust / Cargo
 /target/
-**/*.rs.bk
+
+# Android native libs — build output from scripts/build_android.ps1 (cargo ndk).
+# Runtime 只需要这里的 .so；third_party 是编译缓存，不会打进 APK。
+/android/jniLibs/
+
+# MNN vendor cache — scripts/download_mnn_android.ps1
+#   third_party/mnn/source/   编译用头文件与源码
+#   third_party/mnn/android/    预编译 libMNN.so（链接后复制到 jniLibs）
+# 只消费 Release / jniLibs 时可删；重编 Android 时再下载即可。
+/third_party/
+
+# Release packaging — scripts/build_release_*.ps1, tools/pack/pack-all.ps1
 /dist/
+
+# Python venv — ONNX→MNN 转换 (mnnconvert); CI: pip install MNN
+/.env/
+
+# Dart package (local_infer_core)
 dart/.dart_tool/
 
-# Fixture weights (run scripts/download_all_packs.ps1 or per-pack download scripts)
+# Editor / backup
+**/*.rs.bk
+
+# ---------------------------------------------------------------------------
+# Test fixtures — large model weights (scripts/download_all_packs.ps1)
+# manifest.json / LICENSE / NOTICE / dict txt 可提交；权重文件本地下载。
+# ---------------------------------------------------------------------------
 crates/infer-core/tests/fixtures/**/det.onnx
 crates/infer-core/tests/fixtures/**/rec.onnx
+crates/infer-core/tests/fixtures/**/det.mnn
+crates/infer-core/tests/fixtures/**/rec.mnn
 crates/infer-core/tests/fixtures/**/ppocrv6*.txt
 crates/infer-core/tests/fixtures/**/vision.onnx
+crates/infer-core/tests/fixtures/**/vision.mnn
 crates/infer-core/tests/fixtures/**/embeddings.bin
 crates/infer-core/tests/fixtures/sample_ocr.jpg

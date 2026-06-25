@@ -9,3 +9,4 @@ Icon artwork sources (see manifest license.upstream for SPDX):
 
 embeddings.bin is derived from rasterized PNG templates embedded with MobileCLIP2-S0.
 Index format: MCL2 v1 (fp32) or v2 (int8 per-vector scale).
+The same index pack is used on desktop (ONNX embed) and mobile (MNN embed); only the runtime embed model differs.

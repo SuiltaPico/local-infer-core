@@ -14,12 +14,87 @@ on:
         description: 'Skip icons.bundled index build (slow)'
         type: boolean
         default: false
+      skip_mnn:
+        description: 'Skip ONNX to MNN conversion'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_HTTP_MULTIPLEXING: "false"
+
 jobs:
-  release-windows-x64:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.95.0'
+          targets: x86_64-pc-windows-msvc,aarch64-pc-windows-msvc
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-windows-rust-1.95
+
+      - name: Build Windows native libraries (x64 + arm64, ONNX)
+        shell: pwsh
+        run: ./scripts/build_release_windows.ps1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-packages
+          path: dist/infer-core-windows-*.zip
+
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.95.0'
+          targets: aarch64-linux-android,x86_64-linux-android
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-android-rust-1.95
+
+      - uses: nttld/setup-ndk@v1
+        id: ndk
+        with:
+          ndk-version: r27c
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --locked
+
+      - name: Install cmake
+        run: sudo apt-get update && sudo apt-get install -y cmake
+
+      - name: Build Android native libraries (arm64 + x64, MNN)
+        shell: pwsh
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+          NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: ./scripts/build_release_android.ps1 -DownloadMnn
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-packages
+          path: dist/infer-core-android-*.zip
+
+  build-model-packs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -29,55 +104,82 @@ jobs:
         with:
           toolchain: '1.95.0'
 
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-model-packs-rust-1.95
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install MNN converter
+        shell: pwsh
+        run: |
+          python -m pip install -U pip
+          python -m pip install -U MNN
+
       - name: Download model packs
         shell: pwsh
         run: |
           $args = @()
           if ('${{ inputs.skip_medium }}' -eq 'true') { $args += '-SkipMedium' }
           if ('${{ inputs.skip_icons }}' -eq 'true') { $args += '-SkipIcons' }
+          if ('${{ inputs.skip_mnn }}' -eq 'true') { $args += '-SkipMnn' }
           ./scripts/download_all_packs.ps1 @args
-
-      - name: Build infer-core-ffi
-        run: cargo build -p infer-core-ffi --release
-
-      - name: Package infer_core.dll
-        shell: pwsh
-        run: |
-          $out = "dist/infer-core-windows-x86_64"
-          New-Item -ItemType Directory -Force -Path "$out/lib" | Out-Null
-          Copy-Item target/release/infer_core.dll "$out/lib/infer_core.dll"
-          Compress-Archive -Path "$out/*" -DestinationPath dist/infer-core-windows-x86_64.zip -Force
 
       - name: Package all model packs
         shell: pwsh
         run: ./tools/pack/pack-all.ps1 -WriteSha256 -UpdateCatalog
 
-      - name: Upload release assets
-        uses: softprops/action-gh-release@v2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: model-packs
+          path: |
+            dist/ocr.*.zip
+            dist/embed.*.zip
+            dist/icons.*.zip
+            dist/SHA256SUMS.txt
+
+  release:
+    needs: [build-windows, build-android, build-model-packs]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
           body: |
             ## infer-core ${{ github.ref_name }}
 
-            ### Native library
+            ### Native library (desktop — ONNX Runtime)
             - `infer-core-windows-x86_64.zip` — `lib/infer_core.dll`
+            - `infer-core-windows-aarch64.zip` — `lib/infer_core.dll`
 
-            ### Model packs (manifest + LICENSE + weights)
+            ### Native library (Android — MNN, no ORT bundled)
+            - `infer-core-android-arm64-v8a.zip` — `jniLibs/arm64-v8a/` (`libinfer_core.so` + MNN runtime `.so`)
+            - `infer-core-android-x86_64.zip` — `jniLibs/x86_64/*.so` (emulator)
+
+            Android OCR/embed use MNN model packs below.
+
+            ### Model packs — ONNX (desktop)
             - `ocr.paddle.ppocr6-tiny.onnx.fp32` — default chat OCR (~8 MB)
             - `ocr.paddle.ppocr6-small.onnx.fp32` — optional upgrade
             - `ocr.paddle.ppocr6-medium.onnx.fp32` — optional upgrade
-            - `embed.mobileclip2-s0.onnx.int8` — default icon embedding (int8 索引配套)
-            - `embed.mobileclip2-s0.onnx.fp32` — embed 精度优先（可选）
+            - `embed.mobileclip2-s0.onnx.fp32` — icon embedding（桌面 fp32，不做 ONNX 权重量化）
             - `icons.bundled.v1.mobileclip2-s0.int8` / `.fp32` — bundled icon index
 
+            ### Model packs — MNN (mobile / Android)
+            - `ocr.paddle.ppocr6-{tiny,small,medium}.mnn.fp32`
+            - `embed.mobileclip2-s0.mnn.{int8,fp32}`
+
+            Icon index (`icons.bundled.v1.*`) is shared across desktop and mobile — not duplicated for MNN.
+
             SHA256 checksums: `SHA256SUMS.txt`
-          files: |
-            dist/infer-core-windows-x86_64.zip
-            dist/ocr.paddle.ppocr6-tiny.onnx.fp32.zip
-            dist/ocr.paddle.ppocr6-small.onnx.fp32.zip
-            dist/ocr.paddle.ppocr6-medium.onnx.fp32.zip
-            dist/embed.mobileclip2-s0.onnx.int8.zip
-            dist/embed.mobileclip2-s0.onnx.fp32.zip
-            dist/icons.bundled.v1.mobileclip2-s0.int8.zip
-            dist/icons.bundled.v1.mobileclip2-s0.fp32.zip
-            dist/SHA256SUMS.txt
+          files: dist/*

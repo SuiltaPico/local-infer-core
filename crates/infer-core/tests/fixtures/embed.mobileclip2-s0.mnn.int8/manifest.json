@@ -1,0 +1,30 @@
+{
+  "schema": 1,
+  "id": "embed.mobileclip2-s0.mnn.int8",
+  "kind": "embed",
+  "family": "mobileclip2",
+  "format": "mnn",
+  "quant": "int8",
+  "files": {
+    "vision": "vision.mnn"
+  },
+  "dim": 512,
+  "preprocess": {
+    "input_size": 256,
+    "layout": "NCHW",
+    "normalize": "mobileclip2"
+  },
+  "runtime": "mnn",
+  "license": {
+    "spdx": "SEE LICENSE",
+    "files": [
+      "LICENSE",
+      "NOTICE"
+    ],
+    "upstream": {
+      "name": "MobileCLIP2-S0",
+      "url": "https://github.com/apple/ml-mobileclip",
+      "component": "vision encoder weights (ONNX converted to MNN)"
+    }
+  }
+}

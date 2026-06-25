@@ -2,16 +2,24 @@
   "schema": 1,
   "id": "icons.bundled.v1.mobileclip2-s0.int8",
   "kind": "icon_index",
-  "embed_model_id": "embed.mobileclip2-s0.onnx.int8",
+  "embed_model_id": "embed.mobileclip2-s0.onnx.fp32",
   "files": {
     "index": "embeddings.bin"
   },
-  "namespaces": ["fa", "fluent", "mdi", "tabler"],
-  "count": 7447,
+  "namespaces": [
+    "fa",
+    "fluent",
+    "mdi",
+    "tabler"
+  ],
+  "count": 16382,
   "index_format": "mcl2-v2",
   "license": {
     "spdx": "SEE NOTICE",
-    "files": ["LICENSE", "NOTICE"],
+    "files": [
+      "LICENSE",
+      "NOTICE"
+    ],
     "upstream": [
       {
         "name": "Material Design Icons",

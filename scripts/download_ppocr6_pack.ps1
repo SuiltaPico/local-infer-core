@@ -5,7 +5,7 @@ param(
     [string]$Size,
 
     [Parameter(Mandatory)]
-    [ValidateSet("int8", "fp32")]
+    [ValidateSet("fp32")]
     [string]$Quant
 )
 

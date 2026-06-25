@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use infer_core::Registry;
+use infer_core_lib::Registry;
 
 #[test]
 fn registry_loads_fixture_pack_with_license() {
@@ -20,7 +20,7 @@ fn registry_validates_fixture_pack_files_when_present() {
         eprintln!("skip: run scripts/download_ppocr6_tiny_fixture.ps1");
         return;
     }
-    let manifest = infer_core::Manifest::load_from_dir(&pack_dir).expect("load manifest");
+    let manifest = infer_core_lib::Manifest::load_from_dir(&pack_dir).expect("load manifest");
     manifest
         .validate_pack_files(&pack_dir)
         .expect("validate pack files");

@@ -53,7 +53,8 @@ void main(List<String> args) async {
     } on UnsupportedError catch (e) {
       throw UnsupportedError(
         'local_infer_core: ${e.message ?? e}\n'
-        'Supported: Windows (x64, arm64). Use hooks user_defines local_lib, '
+        'Supported: Windows (x64, arm64), Android (arm64, x64).\n'
+        'Android releases use backend-mnn (no ORT). Use hooks user_defines local_lib, '
         'LOCAL_INFER_CORE_LIB, or cargo build -p infer-core-ffi --release.',
       );
     } on HttpException catch (e) {

@@ -1,10 +1,8 @@
 # Download MobileCLIP2-S0 vision ONNX into an embed pack fixture directory.
+# Official ONNX/desktop release is fp32 only; use MNN packs for int8 on mobile.
 param(
-    [Parameter(Mandatory)]
-    [ValidateSet("int8", "fp32")]
-    [string]$Quant,
-
-    [switch]$ReuseFp32Weights
+    [ValidateSet("fp32")]
+    [string]$Quant = "fp32"
 )
 
 $ErrorActionPreference = "Stop"
@@ -22,41 +20,33 @@ Copy-Item (Join-Path $shared "LICENSE") (Join-Path $PackDir "LICENSE") -Force
 Copy-Item (Join-Path $shared "NOTICE") (Join-Path $PackDir "NOTICE") -Force
 
 $manifest = [ordered]@{
-    schema    = 1
-    id        = $PackId
-    kind      = "embed"
-    family    = "mobileclip2"
-    format    = "onnx"
-    quant     = $Quant
-    files     = [ordered]@{ vision = "vision.onnx" }
-    dim       = 512
+    schema     = 1
+    id         = $PackId
+    kind       = "embed"
+    family     = "mobileclip2"
+    format     = "onnx"
+    quant      = $Quant
+    files      = [ordered]@{ vision = "vision.onnx" }
+    dim        = 512
     preprocess = [ordered]@{
         input_size = 256
         layout     = "NCHW"
         normalize  = "mobileclip2"
     }
-    runtime   = "onnxruntime"
-    license   = [ordered]@{
+    runtime    = "onnxruntime"
+    license    = [ordered]@{
         spdx     = "SEE LICENSE"
         files    = @("LICENSE", "NOTICE")
         upstream = [ordered]@{
             name      = "MobileCLIP2-S0"
             url       = "https://github.com/apple/ml-mobileclip"
-            component = "vision encoder weights (converted ONNX)"
+            component = "vision encoder weights (converted ONNX fp32)"
         }
     }
 }
 ($manifest | ConvertTo-Json -Depth 6) | Set-Content (Join-Path $PackDir "manifest.json") -Encoding UTF8
 
-if ($ReuseFp32Weights -and $Quant -eq "int8") {
-    $src = Join-Path $FixturesDir "embed.mobileclip2-s0.onnx.fp32\vision.onnx"
-    if (-not (Test-Path $src)) {
-        throw "missing $src — run download_embed_mobileclip2_pack.ps1 -Quant fp32 first"
-    }
-    Copy-Item $src $VisionDest -Force
-    Write-Host "reused vision.onnx from embed.mobileclip2-s0.onnx.fp32"
-}
-elseif (Test-Path $VisionDest) {
+if (Test-Path $VisionDest) {
     Write-Host "skip (exists): vision.onnx"
 }
 else {

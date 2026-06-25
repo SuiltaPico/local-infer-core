@@ -6,15 +6,23 @@ edition.workspace = true
 license.workspace = true
 
 [features]
-default = ["ort-directml"]
+default = ["backend-ort"]
+backend-ort = ["dep:ort", "dep:oar-ocr", "ort-directml"]
+backend-mnn = ["dep:mnn", "dep:imageproc"]
 ort-directml = ["ort/directml", "oar-ocr/directml"]
 ort-coreml = ["ort/coreml"]
 ort-cuda = ["ort/cuda"]
 
+[lib]
+name = "infer_core_lib"
+crate-type = ["rlib"]
+
 [dependencies]
 image = "0.25"
-oar-ocr = { version = "0.7.1", features = ["download-binaries"] }
-ort = { version = "2.0.0-rc.12", default-features = false, features = ["download-binaries", "ndarray"] }
+imageproc = { version = "0.25", optional = true }
+mnn = { version = "0.2.0", optional = true, features = ["opencl", "vulkan", "mnn-threadpool"] }
+oar-ocr = { version = "0.7.1", optional = true, features = ["download-binaries"] }
+ort = { version = "2.0.0-rc.12", optional = true, default-features = false, features = ["download-binaries", "ndarray"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
@@ -26,3 +34,4 @@ tempfile = "3"
 [[bin]]
 name = "icon-index-build"
 path = "src/bin/icon_index_build.rs"
+required-features = ["backend-ort"]

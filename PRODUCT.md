@@ -118,11 +118,13 @@ LOCAL_INFER_ORT_EP=cuda,cpu ui-extractor extract ...
 示例：
 
 ```
-ocr.paddle.ppocr6-tiny.onnx.int8
+ocr.paddle.ppocr6-tiny.onnx.fp32
 ocr.paddle.ppocr6-small.mnn.fp32
-embed.mobileclip2-s0.onnx.int8
-icons.bundled.v1.mobileclip2-s0.int8    # 预计算嵌入索引（官方 Release 仅此一种）
+embed.mobileclip2-s0.onnx.fp32
+icons.bundled.v1.mobileclip2-s0.int8    # 预计算嵌入索引（.int8 = 索引存储格式，非 ONNX 量化）
 ```
+
+**ONNX 官方 Release 仅 fp32**（OCR + embed 权重不做 ONNX 侧 int8）；权重量化仅在 **MNN 移动包**（如 `embed.mobileclip2-s0.mnn.int8`）。
 
 ### manifest.json（schema v1）
 
@@ -135,12 +137,12 @@ icons.bundled.v1.mobileclip2-s0.int8    # 预计算嵌入索引（官方 Release
 ```json
 {
   "schema": 1,
-  "id": "ocr.paddle.ppocr6-tiny.onnx.int8",
+  "id": "ocr.paddle.ppocr6-tiny.onnx.fp32",
   "kind": "ocr",
   "family": "paddle",
   "version": 6,
   "format": "onnx",
-  "quant": "int8",
+  "quant": "fp32",
   "files": { "det": "det.onnx", "rec": "rec.onnx", "dict": "ppocrv6_tiny_dict.txt" },
   "runtime": "onnxruntime",
   "inputs": { "det_max_side": 960, "rec_height": 48 },
@@ -157,7 +159,33 @@ icons.bundled.v1.mobileclip2-s0.int8    # 预计算嵌入索引（官方 Release
 }
 ```
 
-**嵌入包（family: `mobileclip2`）**
+**嵌入包（family: `mobileclip2`）— ONNX 桌面示例**
+
+```json
+{
+  "schema": 1,
+  "id": "embed.mobileclip2-s0.onnx.fp32",
+  "kind": "embed",
+  "family": "mobileclip2",
+  "format": "onnx",
+  "quant": "fp32",
+  "files": { "vision": "vision.onnx" },
+  "dim": 512,
+  "preprocess": { "input_size": 256, "layout": "NCHW", "normalize": "mobileclip2" },
+  "runtime": "onnxruntime",
+  "license": {
+    "spdx": "SEE LICENSE",
+    "files": ["LICENSE", "NOTICE"],
+    "upstream": {
+      "name": "MobileCLIP2-S0",
+      "url": "https://github.com/apple/ml-mobileclip",
+      "component": "vision encoder weights (converted ONNX fp32)"
+    }
+  }
+}
+```
+
+**嵌入包 — MNN 移动示例（含权重量化）**
 
 ```json
 {
@@ -191,7 +219,7 @@ icons.bundled.v1.mobileclip2-s0.int8    # 预计算嵌入索引（官方 Release
   "schema": 1,
   "id": "icons.bundled.v1.mobileclip2-s0.int8",
   "kind": "icon_index",
-  "embed_model_id": "embed.mobileclip2-s0.mnn.int8",
+  "embed_model_id": "embed.mobileclip2-s0.onnx.fp32",
   "files": { "index": "embeddings.bin" },
   "namespaces": ["mdi", "tabler", "fluent", "fa"],
   "count": 12000,
@@ -211,7 +239,7 @@ icons.bundled.v1.mobileclip2-s0.int8    # 预计算嵌入索引（官方 Release
 
 条目标识仍带 namespace 前缀（如 `mdi:cog`、`tabler:home`），便于 LLM 理解与用户自定义库区分。
 
-索引包的 `embed_model_id` 必须与运行时加载的嵌入模型在 **family、dim、preprocess** 上一致。
+索引包的 `embed_model_id` 记录**建索引时**使用的 embed 包（离线用 ONNX）。运行时加载的 embed 模型只需在 **family、dim、preprocess** 上一致（桌面 ONNX / 移动 MNN 可共用同一索引包，无需另发 MNN 版）。
 
 ### 许可证与归属
 
@@ -228,7 +256,7 @@ icons.bundled.v1.mobileclip2-s0.int8    # 预计算嵌入索引（官方 Release
 zip / 目录结构示例：
 
 ```
-ocr.paddle.ppocr6-tiny.onnx.int8/
+ocr.paddle.ppocr6-tiny.onnx.fp32/
 ├── manifest.json
 ├── LICENSE
 ├── NOTICE
@@ -284,12 +312,12 @@ ocr.paddle.ppocr6-tiny.onnx.int8/
 ```
 {LOCAL_INFER_ROOT}/
 ├── registry.json                 # 可选：已启用包、优先级
-├── ocr.paddle.ppocr6-tiny.onnx.int8/
+├── ocr.paddle.ppocr6-tiny.onnx.fp32/
 │   ├── manifest.json
 │   ├── LICENSE
 │   ├── NOTICE
 │   └── …
-├── embed.mobileclip2-s0.onnx.int8/
+├── embed.mobileclip2-s0.onnx.fp32/
 └── icons.bundled.v1.mobileclip2-s0.int8/
 ```
 
@@ -347,26 +375,35 @@ icon_index.match_embedding(&vec)?;
 
 CI 自动发布 zip，供下载解压到 `{LOCAL_INFER_ROOT}`。
 
-### 神经网络包
+### 神经网络包 — ONNX（桌面）
 
 | 包 id | 说明 |
 |-------|------|
-| `ocr.paddle.ppocr6-tiny.onnx.fp32` | 默认内置，聊天截图 OCR（已足够小，不做 int8） |
+| `ocr.paddle.ppocr6-tiny.onnx.fp32` | 默认内置，聊天截图 OCR |
 | `ocr.paddle.ppocr6-small.onnx.fp32` | 可选升级 |
-| `ocr.paddle.ppocr6-medium.onnx.fp32` | 可选升级 |
-| `embed.mobileclip2-s0.onnx.int8` | 默认内置，图标嵌入（**OCR 以外唯一官方 int8 包**） |
-| `embed.mobileclip2-s0.onnx.fp32` | 精度优先 |
+| `ocr.paddle.ppocr6-medium.onnx.fp32` | 可选升级（~132 MB） |
+| `embed.mobileclip2-s0.onnx.fp32` | 默认内置，图标嵌入（桌面 fp32，不做 ONNX 权重量化） |
 
-每个 zip：`manifest.json` + `LICENSE`（+ 多上游时 `NOTICE`）+ 权重 + 字典（OCR）。Release notes 附 SPDX / 上游链接摘要。
+### 神经网络包 — MNN（移动 / Android）
+
+| 包 id | 说明 |
+|-------|------|
+| `ocr.paddle.ppocr6-tiny.mnn.fp32` | 默认移动 OCR |
+| `ocr.paddle.ppocr6-small.mnn.fp32` | 可选升级 |
+| `ocr.paddle.ppocr6-medium.mnn.fp32` | 可选升级 |
+| `embed.mobileclip2-s0.mnn.int8` | 默认移动 embed |
+| `embed.mobileclip2-s0.mnn.fp32` | 精度优先 |
+
+MNN 包由对应 ONNX fixture 经 `scripts/build_all_mnn_packs.ps1` 转换（`pip install MNN` 提供 `mnnconvert`）；语义不变，仅格式/精度转换，NOTICE 中注明。
 
 ### 图标嵌入包
 
-开发与 CI 可从多套开源 SVG 离线合建索引；**对外 Release 仅一种官方精选包**：
+开发与 CI 可从多套开源 SVG 离线合建索引。**对外 Release 仅一种官方精选包**，桌面与移动共用（索引是预计算向量，不是神经网络权重，无需 MNN 转换）：
 
 | 包 id | 说明 |
 |-------|------|
-| `icons.bundled.v1.mobileclip2-s0.int8` | 常见开源图标（MDI / Tabler / Fluent / FA 等合并），离线建索引，**默认内置** |
-| `icons.bundled.v1.mobileclip2-s0.fp32` | 同上 fp32 版（可选） |
+| `icons.bundled.v1.mobileclip2-s0.int8` | 默认内置（7447 图标，MCL2 v2） |
+| `icons.bundled.v1.mobileclip2-s0.fp32` | fp32 索引（可选） |
 
 不逐库 Release（如单独的 `icons.mdi.*`）；用户自定义场景走 `icons.custom.{id}.*`。
 

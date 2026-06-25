@@ -5,3 +5,4 @@ https://github.com/PaddlePaddle/PaddleOCR
 
 This pack contains ONNX inference weights from PaddlePaddle official channels.
 No modification to model semantics; repackaged for local-infer-core manifest layout.
+MNN packs (`.mnn.fp32`) are converted from the same ONNX weights via MNNConvert.

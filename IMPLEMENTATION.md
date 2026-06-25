@@ -12,7 +12,7 @@
 | 仓库 | 路径 | 今天状态 |
 |------|------|----------|
 | **local-infer-core** | `D:\repo\local-infer-core` | **Phase 1 完成**；Phase 2 FFI + dart 包已落地 |
-| **ui-extractor** | `D:\repo\ui-extractor` | **可运行**：布局 + OCR + 图标匹配一体；ML 仍链 infer-core rlib |
+| **ui-extractor** | `D:\repo\ui-extractor` | **可运行**：布局 + OCR + 图标匹配一体；ML 通过编译期动态链接 `infer_core.dll` |
 | **Mauchat** | `D:\repo\mauchat` | **Phase 2 已接入**本地 OCR（`local_infer_core`）；E2E 待 Windows 验收 |
 
 你的主战场是 **从零实现 local-infer-core**，然后 **瘦身 ui-extractor**，最后 **Mauchat 接 DLL**。
@@ -36,7 +36,7 @@
 | 推理格式 | 桌面 **ONNX (ORT)**，移动 **MNN** |
 | NCNN | **弃用**，ui-extractor 里的 `backend-ncnn` / `ncnn-bind` 最终删除 |
 | 模型耦合 | **manifest 驱动**；禁止硬编码 `pp-ocrv5_mobile_det.onnx` 这类文件名 |
-| 包 id | `{kind}.{family}.{name}.{format}.{quant}`，例：`ocr.paddle.ppocr6-tiny.onnx.int8` |
+| 包 id | `{kind}.{family}.{name}.{format}.{quant}`，例：`ocr.paddle.ppocr6-tiny.onnx.fp32` |
 | OCR 版本 | 目标 **PP-OCRv6**（tiny / small / medium）；桌面 ONNX 可 wrap **oar-ocr ≥ 0.7** |
 | 图标 Release | 只发 **`icons.bundled.v1.mobileclip2-s0.*`**（多库合并索引）；不单发 mdi/tabler |
 | EP 策略 | **透传** `RuntimeConfig.execution_providers`；内核不擅自改链；缺省才 `auto` |
@@ -139,15 +139,15 @@ final registry = await LocalInferRegistry.open(
 );
 
 // 跨模态转写
-final ocr = registry.ocr('ocr.paddle.ppocr6-tiny.onnx.int8');
+final ocr = registry.ocr('ocr.paddle.ppocr6-tiny.onnx.fp32');
 final text = await ocr.plainText(imageBytes);
 
 // 嵌入 / 图标索引（ui-extractor 也可直接用；Mauchat 若只做 OCR 可不碰）
-final embed = registry.embed('embed.mobileclip2-s0.onnx.int8');
+final embed = registry.embed('embed.mobileclip2-s0.onnx.fp32');
 final index = registry.iconIndex('icons.bundled.v1.mobileclip2-s0.int8');
 
 // 模型管理
-await ModelCatalog.installPack('ocr.paddle.ppocr6-small.onnx.int8'); // 下载 zip → 校验 sha256 → 解压
+await ModelCatalog.installPack('ocr.paddle.ppocr6-small.onnx.fp32'); // 下载 zip → 校验 sha256 → 解压
 PackLicense.readNotice(packId);
 ```
 
@@ -164,7 +164,7 @@ PackLicense.readNotice(packId);
 {
   "packs": [
     {
-      "id": "ocr.paddle.ppocr6-tiny.onnx.int8",
+      "id": "ocr.paddle.ppocr6-tiny.onnx.fp32",
       "urls": ["https://github.com/.../....zip"],
       "sha256": "...",
       "size_bytes": 8500000
@@ -190,7 +190,7 @@ PackLicense.readNotice(packId);
 final ui = UiExtractorEngine.create(
   modelsDir: registry.modelsDir,           // 与 local_infer_core 同一目录
   runtimeConfig: registry.runtimeConfig,   // EP 透传一次即可
-  ocrPackId: 'ocr.paddle.ppocr6-tiny.mnn.int8',
+  ocrPackId: 'ocr.paddle.ppocr6-tiny.mnn.fp32',
   iconIndexPackId: 'icons.bundled.v1.mobileclip2-s0.int8',
 );
 final json = ui.extractBytes(screenshotBytes);
@@ -263,7 +263,7 @@ icon_index.match_embedding(...) -> Option<IconMatch>
 
 - [ ] 从 ui-extractor 迁入 OCR（oar-ocr **0.7+**，v6 tiny + v6 detection config）
 - [ ] 迁入 MobileCLIP2 embed + `EmbeddingIndex`（MCL2）
-- [ ] 官方样例包目录（可先不 Release）：`ocr.paddle.ppocr6-tiny.onnx.int8`、`embed.mobileclip2-s0.onnx.int8`
+- [ ] 官方样例包目录（可先不 Release）：`ocr.paddle.ppocr6-tiny.onnx.fp32`、`embed.mobileclip2-s0.onnx.fp32`
 - [ ] 删除 ui-extractor 内 ORT OCR/embed 的**重复实现**改为 `path` 依赖 infer-core（ui-extractor PR）
 
 ### Phase 2 — FFI + Mauchat 本地 OCR
@@ -276,7 +276,7 @@ icon_index.match_embedding(...) -> Option<IconMatch>
 ### Phase 3 — MNN + Android
 
 - [ ] MNN runtime + Paddle det/rec adapter（**不能**指望 oar-ocr）
-- [ ] `.mnn.int8` 包 + Android CI
+- [ ] MNN embed int8 + OCR fp32 包 + Android CI
 - [ ] Mauchat 内置 assets 解压到 `{app_data}/models/`
 
 ### Phase 4 — Release 流水线
@@ -362,7 +362,7 @@ icon_index.match_embedding(...) -> Option<IconMatch>
 
 1. 初始化 `cargo workspace`（infer-core + infer-core-ffi 空 crate）
 2. `schema/manifest.v1.json` + manifest 解析 + license 文件存在性校验
-3. 一个 fixture 包目录在 `crates/infer-core/tests/fixtures/ocr.paddle.ppocr6-tiny.onnx.int8/`（可无真实 onnx，先测 manifest/license）
+3. 一个 fixture 包目录在 `crates/infer-core/tests/fixtures/ocr.paddle.ppocr6-tiny.onnx.fp32/`（可无真实 onnx，先测 manifest/license）
 4. README 指向 IMPLEMENTATION.md
 
 不要第一个 PR 就接 MNN 或 Mauchat Flutter。

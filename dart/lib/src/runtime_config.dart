@@ -35,10 +35,37 @@ class OnnxConfig {
   }
 }
 
+class MnnConfig {
+  const MnnConfig({
+    this.backend = 'cpu',
+    this.numThread,
+    this.precision = 'normal',
+  });
+
+  final String backend;
+  final int? numThread;
+  final String precision;
+
+  Map<String, dynamic> toJson() => {
+        'backend': backend,
+        if (numThread != null) 'num_thread': numThread,
+        'precision': precision,
+      };
+
+  factory MnnConfig.fromJson(Map<String, dynamic> json) {
+    return MnnConfig(
+      backend: json['backend']?.toString() ?? 'cpu',
+      numThread: json['num_thread'] as int?,
+      precision: json['precision']?.toString() ?? 'normal',
+    );
+  }
+}
+
 class RuntimeConfig {
-  const RuntimeConfig({this.onnx});
+  const RuntimeConfig({this.onnx, this.mnn});
 
   final OnnxConfig? onnx;
+  final MnnConfig? mnn;
 
   factory RuntimeConfig.auto() => const RuntimeConfig(
         onnx: OnnxConfig(executionProviders: ['auto']),
@@ -50,14 +77,17 @@ class RuntimeConfig {
 
   Map<String, dynamic> toJson() => {
         if (onnx != null) 'onnx': onnx!.toJson(),
+        if (mnn != null) 'mnn': mnn!.toJson(),
       };
 
   factory RuntimeConfig.fromJson(Map<String, dynamic> json) {
     final onnxJson = json['onnx'];
+    final mnnJson = json['mnn'];
     return RuntimeConfig(
       onnx: onnxJson is Map<String, dynamic>
           ? OnnxConfig.fromJson(onnxJson)
           : null,
+      mnn: mnnJson is Map<String, dynamic> ? MnnConfig.fromJson(mnnJson) : null,
     );
   }
 }

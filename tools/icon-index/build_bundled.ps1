@@ -22,22 +22,43 @@ function Resolve-UiExtractorRoot {
     throw "ui-extractor not found at $Candidate — pass -UiExtractorRoot"
 }
 
+function Test-IconsBundledLayout {
+    param([string]$IconsDir)
+    $required = @("mdi", "fluent", "tabler", "fa")
+    $total = 0
+    foreach ($ns in $required) {
+        $subdir = Join-Path $IconsDir $ns
+        if (-not (Test-Path $subdir)) { return $false }
+        $n = (Get-ChildItem $subdir -Filter *.png -ErrorAction SilentlyContinue).Count
+        if ($n -eq 0) { return $false }
+        $total += $n
+    }
+    # MDI ~7k + Tabler ~5k + Fluent ~3k + FA ~3k — expect well over 10k when complete.
+    return ($total -ge 15000)
+}
+
 function Ensure-IconPngs {
     param([string]$Root, [string]$IconsDir)
-    $count = 0
-    if (Test-Path $IconsDir) {
+    if ((Test-Path $IconsDir) -and (Test-IconsBundledLayout $IconsDir)) {
         $count = (Get-ChildItem $IconsDir -Recurse -Filter *.png -ErrorAction SilentlyContinue).Count
-    }
-    if ($count -gt 0) {
-        Write-Host "icon PNG templates ready ($count files under $IconsDir)"
+        Write-Host "icon PNG templates ready ($count files, all namespaces under $IconsDir)"
         return
     }
+    $partial = if (Test-Path $IconsDir) {
+        (Get-ChildItem $IconsDir -Recurse -Filter *.png -ErrorAction SilentlyContinue).Count
+    } else { 0 }
+    if ($partial -gt 0) {
+        Write-Host "incomplete icon layout ($partial PNGs) — re-downloading MDI / Tabler / Fluent / FA ..."
+    }
     if ($SkipIconDownload) {
-        throw "no PNG icons under $IconsDir — run ui-extractor scripts/download_icons.ps1 -Rasterize or omit -SkipIconDownload"
+        throw "icon PNGs incomplete under $IconsDir — run ui-extractor scripts/download_icons.ps1 -Rasterize or omit -SkipIconDownload"
     }
     Write-Host "downloading and rasterizing icon libraries (MDI / Tabler / Fluent / FA)..."
     & (Join-Path $Root "scripts\download_icons.ps1") -Rasterize
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    if (-not (Test-IconsBundledLayout $IconsDir)) {
+        throw "icon download finished but layout still incomplete — check ui-extractor scripts/download_icons.ps1 output"
+    }
 }
 
 function Get-IconNamespaces {
@@ -59,7 +80,7 @@ function Write-IconsBundledManifest {
     )
 
     $indexFormat = if ($Quant -eq "fp32") { "mcl2-v1" } else { "mcl2-v2" }
-    $embedModelId = "embed.mobileclip2-s0.onnx.$Quant"
+    $embedModelId = "embed.mobileclip2-s0.onnx.fp32"
 
     $upstream = @(
         [ordered]@{ name = "Material Design Icons"; spdx = "Apache-2.0"; url = "https://github.com/Templarian/MaterialDesign-SVG" },

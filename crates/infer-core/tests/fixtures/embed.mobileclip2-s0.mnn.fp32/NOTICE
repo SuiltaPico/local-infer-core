@@ -4,3 +4,4 @@ Converted ONNX: https://huggingface.co/plhery/mobileclip2-onnx
 
 See upstream repository LICENSE for terms governing the original weights.
 This pack repackages the converted ONNX file without semantic modification.
+MNN packs (`.mnn.*`) are converted from the same ONNX weights via MNNConvert.

@@ -1,0 +1,35 @@
+[package]
+name = "mnn-sys"
+version = "0.1.2"
+edition = "2021"
+license = "Apache-2.0"
+description = "Rust FFI for MNN (vendored in local-infer-core)"
+build = "build.rs"
+links = "mnn"
+
+[features]
+default = ["mnn-threadpool"]
+coreml = ["metal"]
+crt_static = []
+metal = []
+mnn-threadpool = []
+opencl = []
+opengl = []
+openmp = []
+vulkan = []
+
+[dependencies]
+libc = "0.2.155"
+once_cell = "1.20.2"
+tracing-core = "0.1.33"
+
+[build-dependencies]
+anyhow = "1.0.86"
+bindgen = { version = "0.72", features = ["experimental"] }
+cc = "1.1.5"
+cmake = "0.1"
+diffy = "0.4.0"
+dunce = "1.0.4"
+fs_extra = "1.3.0"
+itertools = "0.13"
+tap = "1.0.1"

@@ -11,9 +11,10 @@ $script:Ppocr6Sizes = @{
 function Get-Ppocr6PackId {
     param(
         [Parameter(Mandatory)][ValidateSet("tiny", "small", "medium")][string]$Size,
-        [Parameter(Mandatory)][ValidateSet("int8", "fp32")][string]$Quant
+        [Parameter(Mandatory)][ValidateSet("int8", "fp32")][string]$Quant,
+        [ValidateSet("onnx", "mnn")][string]$Format = "onnx"
     )
-    return "ocr.paddle.ppocr6-$Size.onnx.$Quant"
+    return "ocr.paddle.ppocr6-$Size.$Format.$Quant"
 }
 
 function Get-Ppocr6DetTarName {
@@ -37,7 +38,8 @@ function Write-Ppocr6Manifest {
         [Parameter(Mandatory)][string]$PackId,
         [Parameter(Mandatory)][string]$Size,
         [Parameter(Mandatory)][string]$Quant,
-        [Parameter(Mandatory)][string]$DictFile
+        [Parameter(Mandatory)][string]$DictFile,
+        [ValidateSet("onnx", "mnn")][string]$Format = "onnx"
     )
 
     $versionLabel = switch ($Size) {
@@ -46,20 +48,23 @@ function Write-Ppocr6Manifest {
         "medium" { "PP-OCRv6_medium" }
     }
 
+    $weightExt = if ($Format -eq "mnn") { "mnn" } else { "onnx" }
+    $runtime = if ($Format -eq "mnn") { "mnn" } else { "onnxruntime" }
+
     $manifest = [ordered]@{
         schema    = 1
         id        = $PackId
         kind      = "ocr"
         family    = "paddle"
         version   = 6
-        format    = "onnx"
+        format    = $Format
         quant     = $Quant
         files     = [ordered]@{
-            det  = "det.onnx"
-            rec  = "rec.onnx"
+            det  = "det.$weightExt"
+            rec  = "rec.$weightExt"
             dict = $DictFile
         }
-        runtime   = "onnxruntime"
+        runtime   = $runtime
         inputs    = [ordered]@{ det_max_side = 960; rec_height = 48 }
         detection = [ordered]@{
             score_threshold = 0.2

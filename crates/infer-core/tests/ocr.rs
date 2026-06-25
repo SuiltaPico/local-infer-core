@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use infer_core::{OnnxConfig, Registry, RuntimeConfig};
+use infer_core_lib::{OnnxConfig, Registry, RuntimeConfig};
 
 const PACK_ID: &str = "ocr.paddle.ppocr6-tiny.onnx.fp32";
 

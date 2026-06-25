@@ -8,6 +8,10 @@ environment:
   sdk: ^3.4.0
   flutter: ">=3.16.0"
 
+platforms:
+  android:
+  windows:
+
 hooks:
   user_defines:
     local_infer_core:
@@ -34,5 +38,7 @@ flutter:
     - assets/catalog.json
   plugin:
     platforms:
+      android:
+        ffiPlugin: true
       windows:
         ffiPlugin: true
