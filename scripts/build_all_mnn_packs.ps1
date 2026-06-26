@@ -28,3 +28,4 @@ if ($Force) {
 }
 
 Write-Host "All requested MNN packs ready."
+exit 0

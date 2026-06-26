@@ -31,3 +31,4 @@ if (-not $SkipMnn) {
 }
 
 Write-Host "All requested packs ready."
+exit 0

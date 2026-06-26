@@ -58,4 +58,6 @@ function Convert-OnnxToMnn {
     if ($exitCode -ne 0) {
         Write-Warning "mnnconvert exited $exitCode but output exists — treating as success"
     }
+    # Native exit code survives past Write-Host; reset so parent scripts don't fail CI.
+    $global:LASTEXITCODE = 0
 }
