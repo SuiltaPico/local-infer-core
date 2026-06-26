@@ -114,12 +114,13 @@ jobs:
         with:
           python-version: '3.11'
           cache: 'pip'
+          cache-dependency-path: requirements.txt
 
       - name: Install MNN converter
         shell: pwsh
         run: |
           python -m pip install -U pip
-          python -m pip install -U MNN
+          python -m pip install -r requirements.txt
 
       - name: Download model packs
         shell: pwsh

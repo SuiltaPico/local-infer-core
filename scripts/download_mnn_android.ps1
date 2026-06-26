@@ -38,11 +38,17 @@ if (-not (Test-MnnSourceReady)) {
 
     $extracted = Join-Path $extractRoot "MNN-$Version"
     if (-not (Test-Path $extracted)) {
-        throw "Unexpected MNN source archive layout (missing MNN-$Version)"
+        $dirs = @(Get-ChildItem $extractRoot -Directory -ErrorAction SilentlyContinue)
+        if ($dirs.Count -eq 1) {
+            $extracted = $dirs[0].FullName
+        } else {
+            throw "Unexpected MNN source archive layout (missing MNN-$Version)"
+        }
     }
 
     if (Test-Path $SourceRoot) { Remove-Item -Recurse -Force $SourceRoot }
-    Move-Item $extracted $SourceRoot
+    New-Item -ItemType Directory -Force -Path (Split-Path $SourceRoot -Parent) | Out-Null
+    Copy-Item -Recurse -Force $extracted $SourceRoot
     Write-Host "Installed MNN source headers: third_party/mnn/source/"
 }
 

@@ -14,7 +14,13 @@ powershell -ExecutionPolicy Bypass -File .\scripts\download_mnn_android.ps1
 # 3) 基础编译检查（推荐先跑）
 cargo check
 
-# 4) 下载示例模型包（便于本地验证 OCR / embed）
+# 4) Python 虚拟环境 + MNN 转换器（download_all_packs 转 MNN 包时需要 mnnconvert）
+python -m venv .env
+.\.env\Scripts\Activate.ps1
+python -m pip install -U pip
+pip install -r requirements.txt
+
+# 5) 下载示例模型包（便于本地验证 OCR / embed）
 powershell -ExecutionPolicy Bypass -File .\scripts\download_all_packs.ps1
 ```
 

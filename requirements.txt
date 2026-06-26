@@ -1,0 +1,2 @@
+# ONNX -> MNN conversion (mnnconvert); used by scripts/packs/mnn.ps1
+MNN==3.6.0
