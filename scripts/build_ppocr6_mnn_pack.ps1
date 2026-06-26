@@ -22,8 +22,8 @@ $OnnxDir = Join-Path $FixturesDir $OnnxPackId
 $MnnDir = Join-Path $FixturesDir $MnnPackId
 $DictFile = $script:Ppocr6Sizes[$Size].DictFile
 
-if (-not (Test-Path $OnnxDir)) {
-    Write-Host "ONNX pack missing — downloading $OnnxPackId"
+if (-not (Test-Ppocr6OnnxPackReady -PackDir $OnnxDir -DictFile $DictFile)) {
+    Write-Host "ONNX pack incomplete — downloading $OnnxPackId"
     & (Join-Path $PSScriptRoot "download_ppocr6_pack.ps1") -Size $Size -Quant $Quant
 }
 

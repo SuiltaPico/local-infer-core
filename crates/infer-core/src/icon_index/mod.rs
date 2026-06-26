@@ -33,6 +33,36 @@ impl IndexStorageFormat {
             Self::Int8 => "mcl2-v2",
         }
     }
+
+    pub fn from_index_version(version: u32) -> Result<Self> {
+        match version {
+            INDEX_VERSION_F32 => Ok(Self::F32),
+            INDEX_VERSION_I8 => Ok(Self::Int8),
+            other => Err(InferError::IconIndex(format!(
+                "unsupported embedding index version {other}"
+            ))),
+        }
+    }
+}
+
+/// Read on-disk storage format from an `embeddings.bin` header (magic + version only).
+pub fn read_file_storage_format(path: &Path) -> Result<IndexStorageFormat> {
+    let file = File::open(path).map_err(|e| InferError::IconIndex(e.to_string()))?;
+    let mut reader = BufReader::new(file);
+
+    let mut magic = [0u8; 4];
+    reader
+        .read_exact(&mut magic)
+        .map_err(|e| InferError::IconIndex(e.to_string()))?;
+    if &magic != INDEX_MAGIC {
+        return Err(InferError::IconIndex(format!(
+            "invalid embedding index magic in {}",
+            path.display()
+        )));
+    }
+
+    let version = read_u32(&mut reader)?;
+    IndexStorageFormat::from_index_version(version)
 }
 
 /// Precomputed L2-normalized icon template embeddings (stored as int8 + per-vector scale).
@@ -462,6 +492,47 @@ mod tests {
         assert_eq!(loaded.names, index.names);
         assert_eq!(loaded.scales, index.scales);
         assert_eq!(loaded.codes, index.codes);
+    }
+
+    #[test]
+    fn convert_f32_file_to_int8() {
+        let a = unit_vector(0.3);
+        let b = unit_vector(0.7);
+        let index = EmbeddingIndex::from_float_vectors(
+            EMBED_DIM as u32,
+            vec!["home".into(), "menu".into()],
+            [a, b].concat(),
+        )
+        .unwrap();
+
+        let dir = tempfile::tempdir().unwrap();
+        let fp32_path = dir.path().join("embeddings.fp32.bin");
+        let int8_path = dir.path().join("embeddings.int8.bin");
+        index.save_as(&fp32_path, IndexStorageFormat::F32).unwrap();
+
+        assert_eq!(
+            read_file_storage_format(&fp32_path).unwrap(),
+            IndexStorageFormat::F32
+        );
+
+        let loaded = EmbeddingIndex::load(&fp32_path).unwrap();
+        loaded.save_as(&int8_path, IndexStorageFormat::Int8).unwrap();
+
+        assert_eq!(
+            read_file_storage_format(&int8_path).unwrap(),
+            IndexStorageFormat::Int8
+        );
+        let converted = EmbeddingIndex::load(&int8_path).unwrap();
+        assert_eq!(converted.names, index.names);
+
+        let query = index.vector_f32(0);
+        let (idx, score) = converted.best_match(&query).unwrap();
+        assert_eq!(idx, 0);
+        assert!(score > 0.99);
+
+        let (orig_idx, orig_score) = index.best_match(&query).unwrap();
+        assert_eq!(orig_idx, idx);
+        assert!((orig_score - score).abs() < 0.01);
     }
 
     #[test]

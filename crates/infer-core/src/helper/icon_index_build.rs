@@ -22,8 +22,8 @@ struct PngJob {
 pub fn run(args: &[String]) -> Result<(), String> {
     let mut png_dir: Option<PathBuf> = None;
     let mut vision_model: Option<PathBuf> = None;
-    let mut out: Option<PathBuf> = None;
-    let mut format = IndexStorageFormat::Int8;
+    let mut out_int8: Option<PathBuf> = None;
+    let mut out_fp32: Option<PathBuf> = None;
     let mut template_size = 48u32;
 
     let mut i = 0;
@@ -37,14 +37,13 @@ pub fn run(args: &[String]) -> Result<(), String> {
                 i += 1;
                 vision_model = Some(PathBuf::from(args.get(i).ok_or("--vision-model value")?));
             }
-            "--out" => {
+            "--out-int8" => {
                 i += 1;
-                out = Some(PathBuf::from(args.get(i).ok_or("--out value")?));
+                out_int8 = Some(PathBuf::from(args.get(i).ok_or("--out-int8 value")?));
             }
-            "--format" => {
+            "--out-fp32" => {
                 i += 1;
-                format = IndexStorageFormat::parse(args.get(i).ok_or("--format value")?)
-                    .map_err(|e| e.to_string())?;
+                out_fp32 = Some(PathBuf::from(args.get(i).ok_or("--out-fp32 value")?));
             }
             "--template-size" => {
                 i += 1;
@@ -58,6 +57,12 @@ pub fn run(args: &[String]) -> Result<(), String> {
                 print_usage();
                 return Ok(());
             }
+            "--out" | "--format" => {
+                return Err(format!(
+                    "{} is deprecated; use --out-int8 and/or --out-fp32 instead",
+                    args[i]
+                ));
+            }
             other => return Err(format!("unknown argument: {other}")),
         }
         i += 1;
@@ -65,7 +70,9 @@ pub fn run(args: &[String]) -> Result<(), String> {
 
     let png_dir = png_dir.ok_or("missing --png-dir")?;
     let vision_model = vision_model.ok_or("missing --vision-model")?;
-    let out = out.ok_or("missing --out")?;
+    if out_int8.is_none() && out_fp32.is_none() {
+        return Err("at least one of --out-int8 or --out-fp32 is required".into());
+    }
 
     if !png_dir.is_dir() {
         return Err(format!("png dir not found: {}", png_dir.display()));
@@ -76,9 +83,29 @@ pub fn run(args: &[String]) -> Result<(), String> {
 
     let jobs = collect_png_jobs(&png_dir)?;
     let index = build_index(&jobs, &vision_model, template_size)?;
-    index
-        .save_as(&out, format)
-        .map_err(|e| e.to_string())?;
+
+    if let Some(out) = &out_int8 {
+        index
+            .save_as(out, IndexStorageFormat::Int8)
+            .map_err(|e| e.to_string())?;
+        eprintln!(
+            "wrote {} icons -> {} (format={})",
+            index.count(),
+            out.display(),
+            IndexStorageFormat::Int8.index_format_label()
+        );
+    }
+    if let Some(out) = &out_fp32 {
+        index
+            .save_as(out, IndexStorageFormat::F32)
+            .map_err(|e| e.to_string())?;
+        eprintln!(
+            "wrote {} icons -> {} (format={})",
+            index.count(),
+            out.display(),
+            IndexStorageFormat::F32.index_format_label()
+        );
+    }
 
     let namespaces: Vec<_> = index
         .names
@@ -87,23 +114,15 @@ pub fn run(args: &[String]) -> Result<(), String> {
         .collect::<BTreeSet<_>>()
         .into_iter()
         .collect();
-    eprintln!(
-        "wrote {} icons -> {} (format={}){}",
-        index.count(),
-        out.display(),
-        format.index_format_label(),
-        if namespaces.is_empty() {
-            String::new()
-        } else {
-            format!(", namespaces: {}", namespaces.join(", "))
-        }
-    );
+    if !namespaces.is_empty() {
+        eprintln!("namespaces: {}", namespaces.join(", "));
+    }
     Ok(())
 }
 
 pub fn print_usage() {
     eprintln!(
-        "Usage: infer-core-helper icon index-build --png-dir DIR --vision-model PATH --out PATH [--format int8|f32] [--template-size 48]"
+        "Usage: infer-core-helper icon index-build --png-dir DIR --vision-model PATH (--out-int8 PATH | --out-fp32 PATH | both) [--template-size 48]"
     );
 }
 

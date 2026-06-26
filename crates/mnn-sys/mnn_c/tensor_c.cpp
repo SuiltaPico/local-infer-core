@@ -162,16 +162,19 @@ DimensionType Tensor_getDimensionType(const Tensor *tensor) {
   return static_cast<DimensionType>(
       reinterpret_cast<const MNN::Tensor *>(tensor)->getDimensionType());
 }
-halide_type_t Tensor_getType(const Tensor *tensor) {
-  auto mnn_tensor = reinterpret_cast<const MNN::Tensor *>(tensor);
-  return mnn_tensor->getType();
+HalideTypeC Tensor_getType(const Tensor *tensor) {
+  auto t = reinterpret_cast<const MNN::Tensor *>(tensor)->getType();
+  HalideTypeC out;
+  out.code = t.code;
+  out.bits = t.bits;
+  out.lanes = t.lanes;
+  return out;
 }
 
-bool Tensor_isTypeOf(const Tensor *tensor, struct halide_type_t other) {
+bool Tensor_isTypeOf(const Tensor *tensor, HalideTypeC other) {
   auto my = Tensor_getType(tensor);
-  auto ret = (my.code == other.code && my.bits == other.bits &&
-              my.lanes == other.lanes);
-  return ret;
+  return my.code == other.code && my.bits == other.bits &&
+         my.lanes == other.lanes;
 }
 
 Tensor *Tensor_clone(const Tensor *tensor) {

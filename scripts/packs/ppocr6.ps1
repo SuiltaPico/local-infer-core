@@ -32,6 +32,18 @@ function Get-Ppocr6DictUrl {
     return "$script:ModelScopeDictBase$DictFile"
 }
 
+function Test-Ppocr6OnnxPackReady {
+    param(
+        [Parameter(Mandatory)][string]$PackDir,
+        [Parameter(Mandatory)][string]$DictFile
+    )
+    return (
+        (Test-Path (Join-Path $PackDir "det.onnx")) -and
+        (Test-Path (Join-Path $PackDir "rec.onnx")) -and
+        (Test-Path (Join-Path $PackDir $DictFile))
+    )
+}
+
 function Write-Ppocr6Manifest {
     param(
         [Parameter(Mandatory)][string]$PackDir,

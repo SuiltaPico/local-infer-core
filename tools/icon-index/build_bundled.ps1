@@ -111,44 +111,76 @@ function Write-IconsBundledManifest {
     ($manifest | ConvertTo-Json -Depth 6) | Set-Content (Join-Path $PackDir "manifest.json") -Encoding UTF8
 }
 
-function Build-IconsPack {
+function Prepare-IconsPackDir {
     param(
         [ValidateSet("int8", "fp32")][string]$Quant
     )
 
     $PackId = "icons.bundled.v1.mobileclip2-s0.$Quant"
     $PackDir = Join-Path $FixturesDir $PackId
-    $OutIndex = Join-Path $PackDir "embeddings.bin"
-    $FormatArg = if ($Quant -eq "fp32") { "f32" } else { "int8" }
-
     New-Item -ItemType Directory -Force -Path $PackDir | Out-Null
     $shared = Join-Path $RepoRoot "packs\shared\icons"
     Copy-Item (Join-Path $shared "LICENSE") (Join-Path $PackDir "LICENSE") -Force
     Copy-Item (Join-Path $shared "NOTICE") (Join-Path $PackDir "NOTICE") -Force
+    return @{
+        PackId   = $PackId
+        PackDir  = $PackDir
+        OutIndex = Join-Path $PackDir "embeddings.bin"
+    }
+}
 
-    Write-Host "building $PackId ..."
+function Write-IconsPackManifest {
+    param(
+        [hashtable]$Pack,
+        [int]$Count,
+        [string[]]$Namespaces
+    )
+
+    $Quant = if ($Pack.PackId -match '\.fp32$') { "fp32" } else { "int8" }
+    Write-IconsBundledManifest -PackDir $Pack.PackDir -PackId $Pack.PackId -Quant $Quant -Count $Count -Namespaces $Namespaces
+    Write-Host "pack ready: $($Pack.PackDir) ($($Pack.PackId), $Count icons)"
+}
+
+function Build-IconsPacks {
+    param(
+        [string[]]$Targets
+    )
+
+    $int8Pack = $null
+    $fp32Pack = $null
+    foreach ($q in $Targets) {
+        $pack = Prepare-IconsPackDir -Quant $q
+        if ($q -eq "int8") { $int8Pack = $pack } else { $fp32Pack = $pack }
+    }
+
+    Write-Host "building icons.bundled ($($Targets -join ', ')) ..."
     Push-Location $RepoRoot
     try {
         cargo build -p infer-core --release --bin infer-core-helper
         if ($LASTEXITCODE -gt 0) { exit $LASTEXITCODE }
 
         $bin = Get-InferCoreHelper -RepoRoot $RepoRoot
-        & $bin icon index-build `
-            --png-dir $IconsPngDir `
-            --vision-model $EmbedVision `
-            --out $OutIndex `
-            --format $FormatArg
-        if ($LASTEXITCODE -gt 0) { throw "infer-core-helper icon index-build failed for $PackId" }
+        $buildArgs = @(
+            "icon", "index-build",
+            "--png-dir", $IconsPngDir,
+            "--vision-model", $EmbedVision
+        )
+        if ($int8Pack) { $buildArgs += @("--out-int8", $int8Pack.OutIndex) }
+        if ($fp32Pack) { $buildArgs += @("--out-fp32", $fp32Pack.OutIndex) }
+        & $bin @buildArgs
+        if ($LASTEXITCODE -gt 0) { throw "infer-core-helper icon index-build failed" }
     }
     finally {
         Pop-Location
     }
 
-    if (-not (Test-Path $OutIndex)) {
-        throw "embeddings.bin not produced at $OutIndex"
+    foreach ($pack in @($int8Pack, $fp32Pack)) {
+        if (-not $pack) { continue }
+        if (-not (Test-Path $pack.OutIndex)) {
+            throw "embeddings.bin not produced at $($pack.OutIndex)"
+        }
     }
 
-    Write-Host "writing manifest for $PackId ..."
     $namespaces = Get-IconNamespaces -IconsDir $IconsPngDir
     $pngCount = if ($namespaces.Count -gt 0) {
         ($namespaces | ForEach-Object {
@@ -157,8 +189,12 @@ function Build-IconsPack {
     } else {
         (Get-ChildItem $IconsPngDir -Filter *.png -ErrorAction SilentlyContinue).Count
     }
-    Write-IconsBundledManifest -PackDir $PackDir -PackId $PackId -Quant $Quant -Count $pngCount -Namespaces $namespaces
-    Write-Host "pack ready: $PackDir ($PackId, $pngCount icons)"
+
+    foreach ($pack in @($int8Pack, $fp32Pack)) {
+        if (-not $pack) { continue }
+        Write-Host "writing manifest for $($pack.PackId) ..."
+        Write-IconsPackManifest -Pack $pack -Count $pngCount -Namespaces $namespaces
+    }
 }
 
 if (-not (Test-Path $EmbedVision)) {
@@ -169,8 +205,6 @@ if (-not (Test-Path $EmbedVision)) {
 Ensure-IconPngs -IconsDir $IconsPngDir
 
 $targets = if ($Quant -eq "all") { @("int8", "fp32") } else { @($Quant) }
-foreach ($q in $targets) {
-    Build-IconsPack -Quant $q
-}
+Build-IconsPacks -Targets $targets
 
 Write-Host "icons.bundled packs ready under $FixturesDir"

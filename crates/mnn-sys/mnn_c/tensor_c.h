@@ -16,6 +16,12 @@ typedef struct {
 typedef enum { TENSORFLOW, CAFFE, CAFFE_C4 } DimensionType;
 typedef enum { HANDLE_NONE = 0, HANDLE_STRING = 1 } HandleDataType;
 typedef enum { MAP_TENSOR_WRITE = 0, MAP_TENSOR_READ = 1 } MapType;
+// Plain C POD mirror of halide_type_t (HalideRuntime.h adds C++ methods).
+typedef struct {
+  halide_type_code_t code;
+  uint8_t bits;
+  uint16_t lanes;
+} HalideTypeC;
 Tensor *Tensor_create(int dimSize, DimensionType type);
 Tensor *Tensor_createFromTensor(const Tensor *tensor, DimensionType type,
                                 int allocMemory);
@@ -58,8 +64,8 @@ void Tensor_unmap(Tensor *tensor, MapType mtype, DimensionType dtype,
 Tensor* Tensor_clone(const Tensor *tensor);
 int Tensor_wait(Tensor *tensor, MapType mtype, int finish);
 int Tensor_setDevicePtr(Tensor *tensor, const void *devicePtr, int memoryType);
-struct halide_type_t Tensor_getType(const Tensor *tensor);
-bool Tensor_isTypeOf(const Tensor *tensor, struct halide_type_t type);
+HalideTypeC Tensor_getType(const Tensor *tensor);
+bool Tensor_isTypeOf(const Tensor *tensor, HalideTypeC type);
 #ifdef __cplusplus
 }
 #endif
