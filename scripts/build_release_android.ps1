@@ -14,7 +14,7 @@ try {
         $buildArgs = @{ Abi = "all" }
         if ($DownloadMnn) { $buildArgs.DownloadMnn = $true }
         & (Join-Path $PSScriptRoot "build_android.ps1") @buildArgs
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        if ($LASTEXITCODE -gt 0) { exit $LASTEXITCODE }
     }
 
     if ($SkipPack) {

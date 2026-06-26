@@ -15,7 +15,7 @@ $Abis = if ($Abi -eq "all") { @("arm64-v8a", "x86_64") } else { @($Abi) }
 
 if ($DownloadMnn) {
     & (Join-Path $PSScriptRoot "download_mnn_android.ps1") -Abi all
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    if ($LASTEXITCODE -gt 0) { exit $LASTEXITCODE }
 }
 
 function Test-MnnAbiReady {
@@ -66,10 +66,17 @@ function Copy-MnnRuntimeLibs {
     }
 }
 
-foreach ($name in $Abis) {
-    if (Test-MnnAbiReady $name) { continue }
+if (-not (Test-Path (Join-Path $MnnSource "include\MNN\Interpreter.hpp"))) {
+    & (Join-Path $PSScriptRoot "download_mnn_android.ps1") -Abi arm64-v8a
+    if ($LASTEXITCODE -gt 0) { exit $LASTEXITCODE }
+}
 
-    if ($name -eq "arm64-v8a") {
+function Ensure-MnnAbiReady {
+    param([string]$Name)
+
+    if (Test-MnnAbiReady $Name) { return }
+
+    if ($Name -eq "arm64-v8a") {
         Write-Host @"
 MNN Android prebuilt library not found:
   $MnnAndroidRoot\arm64-v8a\libMNN.so
@@ -81,15 +88,10 @@ or rebuild with -DownloadMnn
         exit 1
     }
 
-    if ($name -eq "x86_64") {
+    if ($Name -eq "x86_64") {
         & (Join-Path $PSScriptRoot "build_mnn_android_x86_64.ps1")
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        if ($LASTEXITCODE -gt 0) { exit $LASTEXITCODE }
     }
-}
-
-if (-not (Test-Path (Join-Path $MnnSource "include\MNN\Interpreter.hpp"))) {
-    & (Join-Path $PSScriptRoot "download_mnn_android.ps1") -Abi arm64-v8a
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 
 function Resolve-NdkHome {
@@ -124,9 +126,11 @@ try {
     $ErrorActionPreference = 'SilentlyContinue'
     rustup target add aarch64-linux-android x86_64-linux-android 2>&1 | Out-Null
     $ErrorActionPreference = $prevEap
-    if ($LASTEXITCODE -ne 0) { throw "rustup target add failed for Android targets" }
+    if ($LASTEXITCODE -gt 0) { throw "rustup target add failed for Android targets" }
 
     foreach ($name in $Abis) {
+        Ensure-MnnAbiReady -Name $name
+
         $env:MNN_COMPILE = "0"
         $env:MNN_LINK = "dylib"
         $env:MNN_LIB_DIR = Join-Path $MnnAndroidRoot $name
@@ -137,7 +141,7 @@ try {
 
         cargo ndk -t $name -o android/jniLibs build --release -p infer-core-ffi `
             --no-default-features --features backend-mnn --lib
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        if ($LASTEXITCODE -gt 0) { exit $LASTEXITCODE }
 
         $jniDir = Join-Path $Root "android\jniLibs\$name"
         $so = Join-Path $jniDir "libinfer_core.so"

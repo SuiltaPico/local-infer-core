@@ -34,6 +34,12 @@ function Resolve-NdkHome {
 function Resolve-AndroidBuildTool {
     param([string]$Name)
 
+    if ($IsLinux -or $IsMacOS) {
+        $onPath = Get-Command $Name -ErrorAction SilentlyContinue
+        if ($onPath) { return $onPath.Source }
+        throw "$Name not found. Install it (e.g. apt-get install -y cmake ninja-build) or add to PATH."
+    }
+
     $SdkCmakeRoot = Join-Path $env:LOCALAPPDATA "Android\Sdk\cmake"
     if (Test-Path $SdkCmakeRoot) {
         $latest = Get-ChildItem $SdkCmakeRoot -Directory | Sort-Object Name -Descending | Select-Object -First 1
@@ -115,10 +121,10 @@ $cmakeArgs = @(
 )
 
 & $Cmake @cmakeArgs
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+if ($LASTEXITCODE -gt 0) { exit $LASTEXITCODE }
 
 & $Cmake --build $BuildDir --target install -j
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+if ($LASTEXITCODE -gt 0) { exit $LASTEXITCODE }
 
 $installLibDir = Join-Path $InstallDir "lib"
 $builtLib = Join-Path $installLibDir "libMNN.so"
