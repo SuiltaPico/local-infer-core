@@ -19,7 +19,7 @@ function Get-InferCoreHelper {
         Write-Host "building infer-core-helper (release) ..."
         Push-Location $RepoRoot
         try {
-            Invoke-CargoWithRetry build -p infer-core --release --bin infer-core-helper
+            Invoke-CargoWithRetry -Arguments @('build', '-p', 'infer-core', '--release', '--bin', 'infer-core-helper')
         } finally {
             Pop-Location
         }

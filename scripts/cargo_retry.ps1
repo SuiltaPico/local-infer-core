@@ -11,13 +11,13 @@ function Get-ScratchDir {
 
 function Invoke-CargoWithRetry {
     param(
-        [Parameter(ValueFromRemainingArguments = $true)]
-        [string[]]$CargoArgs
+        [Parameter(Mandatory = $true)]
+        [string[]]$Arguments
     )
 
     $maxAttempts = 5
     for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
-        & cargo @CargoArgs
+        & cargo @Arguments
         if ($LASTEXITCODE -eq 0) { return }
         if ($attempt -lt $maxAttempts) {
             $delay = [Math]::Min(30, 5 * $attempt)
