@@ -31,12 +31,16 @@ try {
     New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 
     foreach ($t in $windowsTargets) {
-        $dll = Join-Path $Root "target\$($t.Triple)\release\infer_core.dll"
+        $releaseDir = Join-Path $Root "target\$($t.Triple)\release"
+        $dll = Join-Path $releaseDir "infer_core.dll"
+        $importLib = Join-Path $releaseDir "infer_core.dll.lib"
         if (-not (Test-Path $dll)) { throw "Build output not found: $dll" }
+        if (-not (Test-Path $importLib)) { throw "Build output not found: $importLib" }
 
         $stage = Join-Path $OutDir "infer-core-$($t.Label)"
         New-Item -ItemType Directory -Force -Path "$stage/lib" | Out-Null
         Copy-Item $dll "$stage/lib/infer_core.dll"
+        Copy-Item $importLib "$stage/lib/infer_core.dll.lib"
         $zip = Join-Path $OutDir "infer-core-$($t.Label).zip"
         if (Test-Path $zip) { Remove-Item -Force $zip }
         Compress-Archive -Path "$stage/*" -DestinationPath $zip -Force
