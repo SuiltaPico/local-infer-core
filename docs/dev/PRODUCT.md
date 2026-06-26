@@ -4,8 +4,8 @@
 
 相关仓库：
 
-- [ui-extractor](../ui-extractor/PRODUCT.md) — UI 截图 → JSON 树（依赖本仓库）
-- [Mauchat](../mauchat/PRODUCT.md) — 消费方 App
+- [ui-extractor](../../../ui-extractor/PRODUCT.md) — UI 截图 → JSON 树（依赖本仓库）
+- [Mauchat](../../../mauchat/PRODUCT.md) — 消费方 App
 
 ---
 
@@ -365,9 +365,9 @@ icon_index.match_embedding(&vec)?;
 
 - Native Assets hook：仅 `infer_core.dll` / `libinfer_core.so`（**不含**模型 zip）
 - 封装上述 FFI + `ModelCatalog`（下载/解压/校验 pack）+ `RuntimeConfig` 类型
-- Mauchat 跨模态转写 **只依赖此包**；UI 自动化另加 [ui_extractor](../ui-extractor/PRODUCT.md) dart 包
+- Mauchat 跨模态转写 **只依赖此包**；UI 自动化另加 [ui_extractor](../../../ui-extractor/PRODUCT.md) dart 包
 
-详见 [IMPLEMENTATION.md §6.1](IMPLEMENTATION.md#61-dart-包-local_infer_core本仓库-dart)。
+实现见仓库 [`dart/`](../../dart/) 与 [README](../../README.md)。
 
 ---
 

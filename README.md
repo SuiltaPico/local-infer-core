@@ -128,7 +128,6 @@ cargo test -p infer-core -p infer-core-ffi
 
 | 文档 | 用途 |
 |------|------|
-| [IMPLEMENTATION.md](IMPLEMENTATION.md) | 详细实现背景、阶段计划、约束与决策 |
-| [PRODUCT.md](PRODUCT.md) | 产品目标、对外契约、包规范 |
+| [docs/dev/PRODUCT.md](docs/dev/PRODUCT.md) | 产品目标、对外契约、包规范 |
 
 相关项目：[ui-extractor](../ui-extractor/PRODUCT.md)
