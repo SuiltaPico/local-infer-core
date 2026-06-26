@@ -21,7 +21,7 @@ Future<File> fetchNativeLibrary({
     assetBaseName: assetBase,
     targetOS: targetOS,
   );
-  final ext = targetOS == OS.windows ? '.zip' : '.tar.gz';
+  final ext = '.${releaseArchiveExtension(targetOS)}';
   final archiveFile = File(p.join(outputDirectory.path, '$assetBase$ext'));
   final extractRoot = Directory(p.join(outputDirectory.path, assetBase));
 
@@ -34,7 +34,7 @@ Future<File> fetchNativeLibrary({
     await _extractArchive(
       archiveFile: archiveFile,
       dest: extractRoot,
-      isZip: targetOS == OS.windows,
+      isZip: releaseArchiveUsesZip(targetOS),
     );
   }
 

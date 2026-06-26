@@ -65,6 +65,13 @@ String androidLibraryRelativePath(Architecture targetArchitecture) {
   return 'jniLibs/$abi/libinfer_core.so';
 }
 
+/// GitHub release archives: Windows/Android ship as zip; Linux/macOS as tar.gz.
+bool releaseArchiveUsesZip(OS targetOS) =>
+    targetOS == OS.windows || targetOS == OS.android;
+
+String releaseArchiveExtension(OS targetOS) =>
+    releaseArchiveUsesZip(targetOS) ? 'zip' : 'tar.gz';
+
 Uri releaseArchiveUrl({
   required String repo,
   required String tag,
@@ -72,7 +79,7 @@ Uri releaseArchiveUrl({
   required OS targetOS,
 }) {
   final vTag = tag.startsWith('v') ? tag : 'v$tag';
-  final ext = targetOS == OS.windows ? 'zip' : 'tar.gz';
+  final ext = releaseArchiveExtension(targetOS);
   return Uri.https(
     'github.com',
     '/$repo/releases/download/$vTag/$assetBaseName.$ext',
