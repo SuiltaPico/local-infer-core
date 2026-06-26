@@ -78,6 +78,16 @@ impl OcrEngine {
         })
     }
 
+    /// Override manifest defaults (e.g. ui-extractor CLI flags).
+    pub fn apply_config_overrides(&mut self, min_confidence: Option<f32>, max_side: Option<u32>) {
+        if let Some(v) = min_confidence {
+            self.config.min_confidence = v;
+        }
+        if let Some(v) = max_side {
+            self.config.max_side = v;
+        }
+    }
+
     #[deprecated(note = "use Registry::load_ocr with manifest-driven pack layout")]
     pub fn from_model_dir(
         model_dir: &Path,
@@ -235,8 +245,6 @@ struct DetContext {
     scale: f32,
     pad_left: u32,
     pad_top: u32,
-    prob_w: u32,
-    prob_h: u32,
 }
 
 fn detect_text_boxes(
@@ -320,8 +328,6 @@ fn detect_text_boxes(
         scale,
         pad_left,
         pad_top,
-        prob_w,
-        prob_h,
     };
 
     boxes_from_prob_map(

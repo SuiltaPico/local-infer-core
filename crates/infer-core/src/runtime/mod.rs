@@ -157,6 +157,7 @@ fn resolved_eps_has_gpu(eps: &[String]) -> bool {
         .any(|ep| matches!(ep.as_str(), "directml" | "coreml" | "cuda"))
 }
 
+#[cfg(feature = "backend-ort")]
 fn ep_available(name: &str) -> bool {
     match name {
         "cpu" => true,

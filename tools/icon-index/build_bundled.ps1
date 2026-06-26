@@ -3,7 +3,7 @@ param(
     [ValidateSet("int8", "fp32", "all")]
     [string]$Quant = "all",
 
-    [string]$UiExtractorRoot = (Join-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) "..\ui-extractor"),
+    [string]$AssetsDir = "",
 
     [switch]$SkipIconDownload
 )
@@ -11,15 +11,18 @@ param(
 $ErrorActionPreference = "Stop"
 
 $RepoRoot = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
+if (-not $AssetsDir) {
+    $AssetsDir = Join-Path $RepoRoot "assets"
+}
 $FixturesDir = Join-Path $RepoRoot "crates\infer-core\tests\fixtures"
 $EmbedVision = Join-Path $FixturesDir "embed.mobileclip2-s0.onnx.fp32\vision.onnx"
-$IconsPngDir = Join-Path $UiExtractorRoot "assets\icons"
+$IconsPngDir = Join-Path $AssetsDir "icons"
 
-function Resolve-UiExtractorRoot {
-    param([string]$Candidate)
-    $resolved = Resolve-Path $Candidate -ErrorAction SilentlyContinue
-    if ($resolved) { return $resolved.Path }
-    throw "ui-extractor not found at $Candidate — pass -UiExtractorRoot"
+function Get-InferCoreHelper {
+    param([string]$RepoRoot)
+
+    $exeName = if ($IsWindows -or ($env:OS -match "Windows")) { "infer-core-helper.exe" } else { "infer-core-helper" }
+    return Join-Path $RepoRoot (Join-Path "target" (Join-Path "release" $exeName))
 }
 
 function Test-IconsBundledLayout {
@@ -38,7 +41,7 @@ function Test-IconsBundledLayout {
 }
 
 function Ensure-IconPngs {
-    param([string]$Root, [string]$IconsDir)
+    param([string]$IconsDir)
     if ((Test-Path $IconsDir) -and (Test-IconsBundledLayout $IconsDir)) {
         $count = (Get-ChildItem $IconsDir -Recurse -Filter *.png -ErrorAction SilentlyContinue).Count
         Write-Host "icon PNG templates ready ($count files, all namespaces under $IconsDir)"
@@ -51,13 +54,13 @@ function Ensure-IconPngs {
         Write-Host "incomplete icon layout ($partial PNGs) — re-downloading MDI / Tabler / Fluent / FA ..."
     }
     if ($SkipIconDownload) {
-        throw "icon PNGs incomplete under $IconsDir — run ui-extractor scripts/download_icons.ps1 -Rasterize or omit -SkipIconDownload"
+        throw "icon PNGs incomplete under $IconsDir — run scripts/download_icons.ps1 -Rasterize or omit -SkipIconDownload"
     }
     Write-Host "downloading and rasterizing icon libraries (MDI / Tabler / Fluent / FA)..."
-    & (Join-Path $Root "scripts\download_icons.ps1") -Rasterize
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    & (Join-Path $RepoRoot "scripts\download_icons.ps1") -OutDir $AssetsDir -Rasterize
+    if ($LASTEXITCODE -gt 0) { exit $LASTEXITCODE }
     if (-not (Test-IconsBundledLayout $IconsDir)) {
-        throw "icon download finished but layout still incomplete — check ui-extractor scripts/download_icons.ps1 output"
+        throw "icon download finished but layout still incomplete — check scripts/download_icons.ps1 output"
     }
 }
 
@@ -126,16 +129,16 @@ function Build-IconsPack {
     Write-Host "building $PackId ..."
     Push-Location $RepoRoot
     try {
-        cargo build -p infer-core --release --bin icon-index-build
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        cargo build -p infer-core --release --bin infer-core-helper
+        if ($LASTEXITCODE -gt 0) { exit $LASTEXITCODE }
 
-        $bin = Join-Path $RepoRoot "target\release\icon-index-build.exe"
-        & $bin `
+        $bin = Get-InferCoreHelper -RepoRoot $RepoRoot
+        & $bin icon index-build `
             --png-dir $IconsPngDir `
             --vision-model $EmbedVision `
             --out $OutIndex `
             --format $FormatArg
-        if ($? -ne $true) { throw "icon-index-build failed for $PackId" }
+        if ($LASTEXITCODE -gt 0) { throw "infer-core-helper icon index-build failed for $PackId" }
     }
     finally {
         Pop-Location
@@ -147,7 +150,6 @@ function Build-IconsPack {
 
     Write-Host "writing manifest for $PackId ..."
     $namespaces = Get-IconNamespaces -IconsDir $IconsPngDir
-    # Re-counting 7k+ PNGs is slow; icon-index-build already validated the set.
     $pngCount = if ($namespaces.Count -gt 0) {
         ($namespaces | ForEach-Object {
             (Get-ChildItem (Join-Path $IconsPngDir $_) -Filter *.png -ErrorAction SilentlyContinue).Count
@@ -159,14 +161,12 @@ function Build-IconsPack {
     Write-Host "pack ready: $PackDir ($PackId, $pngCount icons)"
 }
 
-$UiExtractorRoot = Resolve-UiExtractorRoot $UiExtractorRoot
-
 if (-not (Test-Path $EmbedVision)) {
     Write-Host "embed vision model missing — downloading embed.mobileclip2-s0.onnx.fp32"
     & (Join-Path $RepoRoot "scripts\download_embed_mobileclip2_pack.ps1") -Quant fp32
 }
 
-Ensure-IconPngs -Root $UiExtractorRoot -IconsDir $IconsPngDir
+Ensure-IconPngs -IconsDir $IconsPngDir
 
 $targets = if ($Quant -eq "all") { @("int8", "fp32") } else { @($Quant) }
 foreach ($q in $targets) {

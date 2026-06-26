@@ -80,6 +80,8 @@ cargo test -p infer-core -p infer-core-ffi
 |------|------|
 | 准备 MNN 源码与 Android 预编译库（首次 clone 建议先跑） | `scripts/download_mnn_android.ps1` |
 | 下载全部示例模型包（OCR + embed） | `scripts/download_all_packs.ps1` |
+| 下载图标 SVG 并栅格化 PNG（icons.bundled 建索引用） | `scripts/download_icons.ps1 -Rasterize` |
+| 构建 icons.bundled 索引包 | `tools/icon-index/build_bundled.ps1` |
 | 仅下载 OCR 示例包（PP-OCRv6） | `scripts/download_ppocr6_all.ps1` 或 `scripts/download_ppocr6_pack.ps1` |
 | 仅下载 embed 示例包（MobileCLIP2） | `scripts/download_embed_all.ps1` 或 `scripts/download_embed_mobileclip2_pack.ps1` |
 | 下载最小 OCR fixture（轻量测试） | `scripts/download_ppocr6_tiny_fixture.ps1` |
@@ -112,7 +114,8 @@ cargo test -p infer-core -p infer-core-ffi
 | `scripts/patch_mnn_sys.ps1` | 当前为 no-op（已改为 workspace 内 vendored `mnn-sys`） |
 | `scripts/packs/*.ps1` | pack 相关底层工具（供上层脚本调用） |
 
-> 建议顺序（新环境）：`download_mnn_android.ps1` -> `cargo check` -> `download_all_packs.ps1`。
+> 建议顺序（新环境）：`download_mnn_android.ps1` -> `cargo check` -> `.env` + `pip install -r requirements.txt` -> `download_all_packs.ps1`。  
+> 图标索引包需要 **Node.js + npm**（`download_icons.ps1` 拉 SVG）和 **Rust**（`infer-core-helper icon rasterize-svg` 栅格化 PNG）。
 
 ## 仓库结构（最常用）
 

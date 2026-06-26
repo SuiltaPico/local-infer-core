@@ -122,6 +122,11 @@ jobs:
           python -m pip install -U pip
           python -m pip install -r requirements.txt
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - name: Download model packs
         shell: pwsh
         run: |

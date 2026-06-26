@@ -19,22 +19,14 @@ struct PngJob {
     path: PathBuf,
 }
 
-fn main() {
-    if let Err(e) = run() {
-        eprintln!("icon-index-build: {e}");
-        std::process::exit(1);
-    }
-}
-
-fn run() -> Result<(), String> {
-    let args: Vec<String> = std::env::args().collect();
+pub fn run(args: &[String]) -> Result<(), String> {
     let mut png_dir: Option<PathBuf> = None;
     let mut vision_model: Option<PathBuf> = None;
     let mut out: Option<PathBuf> = None;
     let mut format = IndexStorageFormat::Int8;
     let mut template_size = 48u32;
 
-    let mut i = 1;
+    let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
             "--png-dir" => {
@@ -109,9 +101,9 @@ fn run() -> Result<(), String> {
     Ok(())
 }
 
-fn print_usage() {
+pub fn print_usage() {
     eprintln!(
-        "Usage: icon-index-build --png-dir DIR --vision-model PATH --out PATH [--format int8|f32] [--template-size 48]"
+        "Usage: infer-core-helper icon index-build --png-dir DIR --vision-model PATH --out PATH [--format int8|f32] [--template-size 48]"
     );
 }
 
@@ -244,8 +236,6 @@ fn build_index(
             .collect()
     });
 
-    // Drop ORT sessions on worker threads before the pool joins. Without this,
-    // Windows + DirectML can hang indefinitely in thread_local destructors.
     eprintln!("releasing embedder sessions...");
     drop_thread_engines(&pool);
 

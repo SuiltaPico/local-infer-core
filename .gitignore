@@ -17,6 +17,11 @@
 # Python venv — ONNX→MNN 转换 (mnnconvert); CI: pip install MNN
 /.env/
 
+# Icon template assets — scripts/download_icons.ps1 (npm SVG + infer-core-helper PNG)
+/assets/icons/
+/assets/svg/
+/assets/meta.json
+
 # Dart package (local_infer_core)
 dart/.dart_tool/
 

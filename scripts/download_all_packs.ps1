@@ -3,8 +3,7 @@ param(
     [switch]$SkipMedium,
     [switch]$SkipIcons,
     [switch]$SkipMnn,
-    [switch]$ForceMnn,
-    [string]$UiExtractorRoot = (Join-Path (Split-Path $PSScriptRoot -Parent) "..\ui-extractor")
+    [switch]$ForceMnn
 )
 
 $ErrorActionPreference = "Stop"
@@ -20,7 +19,7 @@ Write-Host "=== MobileCLIP2 embed packs ==="
 
 if (-not $SkipIcons) {
     Write-Host "=== icons.bundled packs (this may take several minutes) ==="
-    & (Join-Path $RepoRoot "tools\icon-index\build_bundled.ps1") -Quant all -UiExtractorRoot $UiExtractorRoot
+    & (Join-Path $RepoRoot "tools\icon-index\build_bundled.ps1") -Quant all
 }
 
 if (-not $SkipMnn) {
