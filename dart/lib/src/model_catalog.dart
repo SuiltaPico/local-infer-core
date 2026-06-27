@@ -14,9 +14,6 @@ const String defaultOcrPackId = 'ocr.paddle.ppocr6-tiny.onnx.fp32';
 /// Environment variable pointing at a directory containing pack subfolders.
 const String localInferModelsDirEnv = 'LOCAL_INFER_MODELS_DIR';
 
-/// Environment variable pointing at infer-core fixture root for dev installs.
-const String localInferFixtureRootEnv = 'LOCAL_INFER_FIXTURE_ROOT';
-
 abstract final class ModelCatalog {
   ModelCatalog._();
 
@@ -57,20 +54,10 @@ abstract final class ModelCatalog {
         continue;
       }
 
-      final fixture = _devFixturePath(packId);
-      if (fixture != null && await Directory(fixture).exists()) {
-        await installFromDirectory(
-          modelsDir: modelsDir,
-          sourceDir: fixture,
-          packId: packId,
-        );
-        continue;
-      }
-
       throw LocalInferException(
         '模型包 $packId 未安装。\n'
         '请将官方 zip 解压到 $modelsDir/$packId/，'
-        '或设置 $localInferFixtureRootEnv / $localInferModelsDirEnv，'
+        '或设置 $localInferModelsDirEnv，'
         '或在 local_infer_core assets 中提供 bundled zip。',
       );
     }
@@ -159,46 +146,6 @@ abstract final class ModelCatalog {
     } on Object {
       return null;
     }
-  }
-
-  static String? _devFixturePath(String packId) {
-    final explicit = Platform.environment[localInferFixtureRootEnv];
-    if (explicit != null && explicit.isNotEmpty) {
-      return p.join(explicit, packId);
-    }
-
-    var dir = Directory.current;
-    while (true) {
-      final candidate = p.join(
-        dir.path,
-        'local-infer-core',
-        'crates',
-        'infer-core',
-        'tests',
-        'fixtures',
-        packId,
-      );
-      if (Directory(candidate).existsSync()) {
-        return candidate;
-      }
-      final sibling = p.join(
-        dir.path,
-        'crates',
-        'infer-core',
-        'tests',
-        'fixtures',
-        packId,
-      );
-      if (Directory(sibling).existsSync()) {
-        return sibling;
-      }
-      final parent = dir.parent;
-      if (parent.path == dir.path) {
-        break;
-      }
-      dir = parent;
-    }
-    return null;
   }
 
   static Future<Map<String, dynamic>> readCatalogJson() async {

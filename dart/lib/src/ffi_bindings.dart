@@ -13,6 +13,23 @@ final class _Bindings {
 
   late final DynamicLibrary _lib = openLocalInferCoreLibrary();
 
+  int Function(Pointer<Pointer<Utf8>>)? _runtimeBackendsJsonLookup;
+
+  int Function(Pointer<Pointer<Utf8>>)? get _runtimeBackendsJsonFn {
+    _runtimeBackendsJsonLookup ??= () {
+      try {
+        return _lib.lookupFunction<
+            Int32 Function(Pointer<Pointer<Utf8>>),
+            int Function(Pointer<Pointer<Utf8>>)>(
+          'infer_runtime_backends_json',
+        );
+      } on Object {
+        return null;
+      }
+    }();
+    return _runtimeBackendsJsonLookup;
+  }
+
   late final Pointer<Utf8> Function() _version =
       _lib.lookupFunction<Pointer<Utf8> Function(), Pointer<Utf8> Function()>(
     'infer_core_version',
@@ -333,6 +350,22 @@ final class _Bindings {
   );
 
   String get version => _version().toDartString();
+
+  /// Returns JSON from native when supported; null on older libraries.
+  String? runtimeBackendsJson() {
+    final fn = _runtimeBackendsJsonFn;
+    if (fn == null) return null;
+    final jsonPtr = calloc<Pointer<Utf8>>();
+    try {
+      final rc = fn(jsonPtr);
+      if (rc != 0) {
+        return null;
+      }
+      return _takeOwnedString(jsonPtr.value);
+    } finally {
+      calloc.free(jsonPtr);
+    }
+  }
 
   Pointer<Void> createRegistry({
     required String modelsDir,

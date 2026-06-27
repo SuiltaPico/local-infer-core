@@ -604,4 +604,5 @@ unsafe extern "C" {
     pub fn OperatorInfo_name(op: *const core::ffi::c_void) -> *const core::ffi::c_char;
     pub fn OperatorInfo_type(op: *const core::ffi::c_void) -> *const core::ffi::c_char;
     pub fn OperatorInfo_flops(op: *const core::ffi::c_void) -> f32;
+    pub fn mnn_backend_available(type_: MNNForwardType) -> core::ffi::c_int;
 }

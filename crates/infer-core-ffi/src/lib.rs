@@ -171,6 +171,24 @@ pub extern "C" fn infer_core_version() -> *const c_char {
     concat!(env!("CARGO_PKG_VERSION"), "\0").as_ptr() as *const c_char
 }
 
+/// JSON object: `{ "backend": "onnx"|"mnn", "available": ["cpu", ...] }`.
+#[no_mangle]
+pub extern "C" fn infer_runtime_backends_json(out_json: *mut *mut c_char) -> c_int {
+    run(std::ptr::null_mut(), || {
+        let payload = serde_json::json!({
+            "backend": infer_core_lib::runtime::backend_kind(),
+            "available": infer_core_lib::runtime::available_backends(),
+        });
+        let json = serde_json::to_string(&payload).map_err(|e| e.to_string())?;
+        if !out_json.is_null() {
+            unsafe {
+                *out_json = string_to_raw(json);
+            }
+        }
+        Ok(())
+    })
+}
+
 /// Free a string previously returned by this library.
 #[no_mangle]
 pub unsafe extern "C" fn infer_string_free(s: *mut c_char) {
@@ -620,6 +638,17 @@ mod tests {
         let raw = string_to_raw("hello");
         assert!(!raw.is_null());
         unsafe { infer_string_free(raw) };
+    }
+
+    #[test]
+    fn runtime_backends_json_is_non_empty() {
+        let mut json: *mut c_char = ptr::null_mut();
+        let rc = infer_runtime_backends_json(&mut json);
+        assert_eq!(rc, OK);
+        assert!(!json.is_null());
+        let text = unsafe { CStr::from_ptr(json) }.to_str().unwrap();
+        assert!(text.contains("\"available\""));
+        unsafe { infer_string_free(json) };
     }
 
     #[test]

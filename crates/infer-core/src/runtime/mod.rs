@@ -2,6 +2,7 @@
 mod ort;
 #[cfg(feature = "backend-mnn")]
 pub mod mnn;
+mod capabilities;
 
 use crate::error::Result;
 
@@ -170,6 +171,8 @@ fn ep_available(name: &str) -> bool {
 
 #[cfg(feature = "backend-ort")]
 pub use ort::{apply_session_builder, oar_session_config};
+
+pub use capabilities::{available_backends, backend_kind};
 
 #[cfg(test)]
 mod tests {

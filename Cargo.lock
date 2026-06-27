@@ -1029,6 +1029,7 @@ dependencies = [
  "image",
  "imageproc 0.25.1",
  "mnn",
+ "mnn-sys",
  "oar-ocr",
  "ort",
  "rayon",

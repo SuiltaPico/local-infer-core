@@ -8,7 +8,7 @@ license.workspace = true
 [features]
 default = ["backend-ort"]
 backend-ort = ["dep:ort", "dep:oar-ocr", "ort-directml"]
-backend-mnn = ["dep:mnn", "dep:imageproc"]
+backend-mnn = ["dep:mnn", "dep:mnn-sys", "dep:imageproc"]
 ort-directml = ["ort/directml", "oar-ocr/directml"]
 ort-coreml = ["ort/coreml"]
 ort-cuda = ["ort/cuda"]
@@ -21,6 +21,7 @@ crate-type = ["rlib"]
 image = "0.25"
 imageproc = { version = "0.25", optional = true }
 mnn = { version = "0.2.0", optional = true, features = ["opencl", "vulkan", "mnn-threadpool"] }
+mnn-sys = { path = "../mnn-sys", optional = true, features = ["opencl", "vulkan"] }
 oar-ocr = { version = "0.7.1", optional = true, features = ["download-binaries"] }
 ort = { version = "2.0.0-rc.12", optional = true, default-features = false, features = ["download-binaries", "ndarray"] }
 serde = { version = "1", features = ["derive"] }
