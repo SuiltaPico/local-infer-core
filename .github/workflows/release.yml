@@ -6,6 +6,14 @@ on:
       - 'v*'
   workflow_dispatch:
     inputs:
+      build_model_packs:
+        description: 'Rebuild model packs in this run'
+        type: boolean
+        default: false
+      model_packs_tag:
+        description: 'Reuse model packs from this release tag'
+        type: string
+        default: model-packs-latest
       skip_medium:
         description: 'Skip PP-OCRv6 medium pack (large download)'
         type: boolean
@@ -94,22 +102,46 @@ jobs:
           name: android-packages
           path: dist/infer-core-android-*.zip
 
-  build-model-packs:
+  prepare-model-packs:
     runs-on: windows-latest
+    outputs:
+      build: ${{ steps.model_pack_strategy.outputs.build }}
+      tag: ${{ steps.model_pack_strategy.outputs.tag }}
     steps:
+      - name: Resolve model pack strategy
+        id: model_pack_strategy
+        shell: pwsh
+        run: |
+          $build = $false
+          if ('${{ github.event_name }}' -eq 'workflow_dispatch' -and '${{ inputs.build_model_packs }}' -eq 'true') {
+            $build = $true
+          }
+
+          $tag = 'model-packs-latest'
+          if ('${{ github.event_name }}' -eq 'workflow_dispatch' -and '${{ inputs.model_packs_tag }}' -ne '') {
+            $tag = '${{ inputs.model_packs_tag }}'
+          }
+
+          "build=$($build.ToString().ToLower())" >> $env:GITHUB_OUTPUT
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+
       - uses: actions/checkout@v6
+        if: ${{ steps.model_pack_strategy.outputs.build == 'true' }}
 
       - name: Install Rust toolchain
+        if: ${{ steps.model_pack_strategy.outputs.build == 'true' }}
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: '1.95.0'
 
       - name: Cache Rust build artifacts
+        if: ${{ steps.model_pack_strategy.outputs.build == 'true' }}
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: release-model-packs-rust-1.95
 
       - name: Setup Python
+        if: ${{ steps.model_pack_strategy.outputs.build == 'true' }}
         uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -117,17 +149,20 @@ jobs:
           cache-dependency-path: requirements.txt
 
       - name: Install MNN converter
+        if: ${{ steps.model_pack_strategy.outputs.build == 'true' }}
         shell: pwsh
         run: |
           python -m pip install -U pip
           python -m pip install -r requirements.txt
 
       - name: Setup Node.js
+        if: ${{ steps.model_pack_strategy.outputs.build == 'true' }}
         uses: actions/setup-node@v6
         with:
           node-version: '22'
 
       - name: Download ONNX model packs
+        if: ${{ steps.model_pack_strategy.outputs.build == 'true' }}
         shell: pwsh
         run: |
           $args = @('-SkipMnn', '-SkipIcons')
@@ -135,7 +170,7 @@ jobs:
           ./scripts/download_all_packs.ps1 @args
 
       - name: Build MNN model packs
-        if: ${{ github.event_name != 'workflow_dispatch' || inputs.skip_mnn != true }}
+        if: ${{ steps.model_pack_strategy.outputs.build == 'true' && (github.event_name != 'workflow_dispatch' || inputs.skip_mnn != true) }}
         shell: pwsh
         run: |
           $args = @()
@@ -143,13 +178,39 @@ jobs:
           ./scripts/build_all_mnn_packs.ps1 @args
 
       - name: Build icons bundled packs
-        if: ${{ github.event_name != 'workflow_dispatch' || inputs.skip_icons != true }}
+        if: ${{ steps.model_pack_strategy.outputs.build == 'true' && (github.event_name != 'workflow_dispatch' || inputs.skip_icons != true) }}
         shell: pwsh
         run: ./tools/icon-index/build_bundled.ps1 -Quant all
 
       - name: Package all model packs
+        if: ${{ steps.model_pack_strategy.outputs.build == 'true' }}
         shell: pwsh
         run: ./tools/pack/pack-all.ps1 -WriteSha256 -UpdateCatalog
+
+      - name: Download prebuilt model packs
+        if: ${{ steps.model_pack_strategy.outputs.build != 'true' }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          New-Item -ItemType Directory -Path dist -Force | Out-Null
+          gh release download "${{ steps.model_pack_strategy.outputs.tag }}" --repo "${{ github.repository }}" --pattern "ocr.*.zip" --pattern "embed.*.zip" --pattern "icons.*.zip" --pattern "SHA256SUMS.txt" --dir dist --clobber
+
+      - name: Verify model pack artifacts
+        shell: pwsh
+        run: |
+          if (-not (Test-Path 'dist/SHA256SUMS.txt')) {
+            throw 'Missing dist/SHA256SUMS.txt'
+          }
+          if (-not (Get-ChildItem 'dist/ocr.*.zip' -ErrorAction SilentlyContinue)) {
+            throw 'Missing dist/ocr.*.zip'
+          }
+          if (-not (Get-ChildItem 'dist/embed.*.zip' -ErrorAction SilentlyContinue)) {
+            throw 'Missing dist/embed.*.zip'
+          }
+          if (-not (Get-ChildItem 'dist/icons.*.zip' -ErrorAction SilentlyContinue)) {
+            throw 'Missing dist/icons.*.zip'
+          }
 
       - uses: actions/upload-artifact@v6
         with:
@@ -160,8 +221,29 @@ jobs:
             dist/icons.*.zip
             dist/SHA256SUMS.txt
 
+  publish-model-packs-cache:
+    needs: [prepare-model-packs]
+    if: ${{ github.event_name == 'workflow_dispatch' && needs.prepare-model-packs.outputs.build == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: model-packs
+          path: dist
+
+      - name: Create or update reusable model pack release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MODEL_PACKS_TAG: ${{ needs.prepare-model-packs.outputs.tag }}
+        run: |
+          if gh release view "$MODEL_PACKS_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$MODEL_PACKS_TAG" dist/* --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$MODEL_PACKS_TAG" dist/* --repo "$GITHUB_REPOSITORY" --title "Model packs cache ($MODEL_PACKS_TAG)" --notes "Reusable model packs for release workflow."
+          fi
+
   release:
-    needs: [build-windows, build-android, build-model-packs]
+    needs: [build-windows, build-android, prepare-model-packs]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v7
