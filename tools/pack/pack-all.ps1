@@ -3,14 +3,13 @@ param(
     [string]$FixturesRoot,
     [string]$OutDir,
     [switch]$WriteSha256,
-    [switch]$UpdateCatalog,
     [string[]]$Only = @()
 )
 
 $ErrorActionPreference = "Stop"
 
 $RepoRoot = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
-. (Join-Path $RepoRoot "scripts\packs\catalog.ps1")
+. (Join-Path $RepoRoot "scripts\packs\release.ps1")
 $ReleaseRepo = Get-ReleaseRepo
 $ReleaseTag = Get-ReleaseTag
 if (-not $FixturesRoot) {
@@ -41,8 +40,6 @@ $PackScript = Join-Path $PSScriptRoot "pack.ps1"
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 
 $targets = if ($Only.Count -gt 0) { $Only } else { $OfficialPacks }
-$shaLines = @()
-$catalogPacks = @()
 
 foreach ($packId in $targets) {
     $packDir = Join-Path $FixturesRoot $packId
@@ -54,20 +51,6 @@ foreach ($packId in $targets) {
     $zipPath = Join-Path $OutDir "$packId.zip"
     & $PackScript -PackDir $packDir -OutZip $zipPath
     if ($? -ne $true) { throw "pack failed: $packId" }
-
-    if ($WriteSha256) {
-        $hash = (Get-FileHash -Path $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
-        $shaLines += "$hash  $(Split-Path $zipPath -Leaf)"
-        $size = (Get-Item $zipPath).Length
-        $catalogPacks += [ordered]@{
-            id         = $packId
-            size_bytes = $size
-            sha256     = $hash
-            urls       = @(
-                (Get-PackReleaseUrl -PackId $packId -Repo $ReleaseRepo -Tag $ReleaseTag)
-            )
-        }
-    }
 }
 
 if ($WriteSha256) {
@@ -80,31 +63,6 @@ if ($WriteSha256) {
         Set-Content -Path $shaPath -Value ($shaLines -join "`n") -Encoding UTF8
         Write-Host "wrote $shaPath ($($shaLines.Count) zips)"
     }
-}
-
-if ($UpdateCatalog -and $catalogPacks.Count -gt 0) {
-    $catalogPath = Join-Path $RepoRoot "dart\assets\catalog.json"
-    $existing = @{}
-    if (Test-Path $catalogPath) {
-        $parsed = Get-Content $catalogPath -Raw | ConvertFrom-Json
-        foreach ($p in $parsed.packs) {
-            $existing[$p.id] = $p
-        }
-    }
-    foreach ($entry in $catalogPacks) {
-        $existing[$entry.id] = $entry
-    }
-    $merged = [ordered]@{
-        release = [ordered]@{
-            repo = $ReleaseRepo
-            tag  = $ReleaseTag
-        }
-        packs = @($OfficialPacks | ForEach-Object {
-            if ($existing.ContainsKey($_)) { $existing[$_] } else { [ordered]@{ id = $_; size_bytes = 0; sha256 = ""; urls = @((Get-PackReleaseUrl -PackId $_ -Repo $ReleaseRepo -Tag $ReleaseTag)) } }
-        })
-    }
-    ($merged | ConvertTo-Json -Depth 4) | Set-Content $catalogPath -Encoding UTF8
-    Write-Host "updated catalog: $catalogPath"
 }
 
 Write-Host "pack-all done ($($targets.Count) requested, output: $OutDir)"

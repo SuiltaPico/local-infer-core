@@ -290,7 +290,7 @@ ocr.paddle.ppocr6-tiny.onnx.fp32/
 
 - 同样必须带 `license` + `LICENSE`（`tools/pack` 导入向导可强制填写）  
 - Mauchat **不托管、不担保** 用户包版权；设置页展示 manifest 中的 `license` 供用户自查  
-- App 内置 catalog 只签名/哈希**官方** Release 包
+- App 从 GitHub Release 下载官方 pack（`{pack_id}.zip`）；可选对照 Release 附带的 `SHA256SUMS.txt`
 
 #### Mauchat / App 侧
 
@@ -361,7 +361,7 @@ icon_index.match_embedding(&vec)?;
 
 - Dart FFI + Registry/Session API（`lib/` 不读环境变量）
 - **Native 库**：build hook 从 Release 下载并 bundle，或根应用 `local_lib` 显式指定
-- **模型包**：调用方从 [GitHub Releases](https://github.com/SuiltaPico/local-infer-core/releases) 解压到 `{models_dir}/{pack_id}/`；`PackCatalog.loadFromAssetBundle()` 读官方清单
+- **模型包**：调用方从 [GitHub Releases](https://github.com/SuiltaPico/local-infer-core/releases) 解压到 `{models_dir}/{pack_id}/`；URL 由 `PackRelease.packDownloadUrl(packId)` 生成
 
 实现见 [`dart/`](../../dart/) 与 [DART_API.md](./DART_API.md)。
 

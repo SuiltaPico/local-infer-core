@@ -12,6 +12,12 @@ platforms:
   android:
   windows:
 
+hooks:
+  user_defines:
+    local_infer_core:
+      release_repo: SuiltaPico/local-infer-core
+      release_tag: 0.1.0
+
 dependencies:
   code_assets: ^1.2.1
   ffi: ^2.1.2
@@ -26,8 +32,6 @@ dev_dependencies:
     sdk: flutter
 
 flutter:
-  assets:
-    - assets/catalog.json
   plugin:
     platforms:
       android:

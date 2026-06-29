@@ -44,12 +44,12 @@ hooks:
 |----|------|
 | `skip_download` | 为 `true` 时 hook 不产出 CodeAsset |
 | `local_lib` | 显式本地 `.dll` / `.so`（相对根应用 pubspec）；monorepo 开发推荐此项 |
-| `release_repo` / `release_tag` | 覆盖 `assets/catalog.json` 中的默认 Release 源 |
+| `release_repo` / `release_tag` | 覆盖默认 Release 源（默认 repo + `pubspec.yaml` version → `v{version}`） |
 
 Hook 解析顺序（**仅两步，无静默 fallback**）：
 
 1. `local_lib`（显式）
-2. 否则从 `release_repo` / `release_tag` 下载（默认读 `assets/catalog.json` 的 `release` 段）
+2. 否则从 `release_repo` / `release_tag` 下载（默认对齐 `pubspec.yaml` version）
 
 ### API 一览
 
@@ -60,21 +60,22 @@ Hook 解析顺序（**仅两步，无静默 fallback**）：
 | `usesBundledNativeAsset` | 是否经 build hook `@Native` 解析符号 |
 | `LocalInferLibraryNotInitialized` | 无法解析 native 库时抛出 |
 
-### 模型包与 catalog
+### 模型包 URL
 
-模型包由调用方下载 Release zip，解压到 `{models_dir}/{pack_id}/`（含 `manifest.json`）。
+模型包由调用方从 GitHub Release 下载，解压到 `{models_dir}/{pack_id}/`（含 `manifest.json`）。
 
-`assets/catalog.json` 提供官方 pack 清单与 sha256。读取 API：
+URL 规则（无 `catalog.json`）：
 
 ```dart
-final catalog = await PackCatalog.loadFromAssetBundle();
-final pack = catalog.findPack('ocr.paddle.ppocr6-tiny.onnx.fp32');
+final release = PackRelease.defaults();
+final url = release.packDownloadUrl('ocr.paddle.ppocr6-tiny.onnx.fp32');
+// https://github.com/SuiltaPico/local-infer-core/releases/download/v0.1.0/ocr.paddle.ppocr6-tiny.onnx.fp32.zip
 ```
 
 ## 2. 包入口导出
 
 - `native_library.dart` — 库加载
-- `pack_catalog.dart` — 官方模型 catalog
+- `pack_release.dart` — Release URL 辅助
 - `registry.dart` — Registry
 - `ocr_engine.dart` / `embed_engine.dart` / `icon_index.dart`
 - `runtime_config.dart` / `runtime_capabilities.dart`
@@ -144,7 +145,7 @@ import 'package:local_infer_core/local_infer_core.dart';
 
 // hook 已在 flutter pub get / flutter run 时下载并 bundle infer_core.dll
 
-final catalog = await PackCatalog.loadFromAssetBundle();
+final release = PackRelease.defaults();
 
 final registry = await LocalInferRegistry.open(
   modelsDir: r'D:\models',

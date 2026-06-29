@@ -1,4 +1,4 @@
-# Shared model pack catalog + GitHub Release URL helpers (local-infer-core).
+# GitHub Release URL helpers for local-infer-core model packs (no catalog.json).
 $script:DefaultReleaseRepo = "SuiltaPico/local-infer-core"
 $script:DefaultReleaseTag = "v0.1.0"
 
@@ -8,74 +8,32 @@ function Get-InferCoreRepoRoot {
     return (Split-Path (Split-Path $here -Parent) -Parent)
 }
 
-function Resolve-PackCatalogPath {
-    param([string]$ExplicitPath = "")
-
-    if ($ExplicitPath -and (Test-Path $ExplicitPath)) {
-        return (Resolve-Path $ExplicitPath).Path
-    }
-
-    $repoRoot = Get-InferCoreRepoRoot
-    $candidate = Join-Path $repoRoot "dart\assets\catalog.json"
-    if (Test-Path $candidate) { return $candidate }
-
-    $sibling = Join-Path (Split-Path $repoRoot -Parent) "local-infer-core\dart\assets\catalog.json"
-    if (Test-Path $sibling) { return $sibling }
-
-    return $null
-}
-
-function Read-PackCatalog {
-    param([string]$CatalogPath = "")
-
-    $path = Resolve-PackCatalogPath -ExplicitPath $CatalogPath
-    if (-not $path) {
-        return [ordered]@{
-            release = [ordered]@{
-                repo = $script:DefaultReleaseRepo
-                tag  = $script:DefaultReleaseTag
-            }
-            packs   = @()
-        }
-    }
-
-    $raw = Get-Content $path -Raw | ConvertFrom-Json
-    $release = if ($raw.release) {
-        [ordered]@{
-            repo = if ($raw.release.repo) { [string]$raw.release.repo } else { $script:DefaultReleaseRepo }
-            tag  = if ($raw.release.tag) { [string]$raw.release.tag } else { $script:DefaultReleaseTag }
-        }
-    } else {
-        [ordered]@{
-            repo = $script:DefaultReleaseRepo
-            tag  = $script:DefaultReleaseTag
-        }
-    }
-
-    return [ordered]@{
-        release = $release
-        packs   = @($raw.packs)
-    }
-}
-
 function Get-ReleaseTag {
     param([string]$Tag = "")
 
     if ($Tag) { return $(if ($Tag -match '^v') { $Tag } else { "v$Tag" }) }
-    $envTag = $env:LOCAL_INFER_RELEASE_TAG
-    if ($envTag) { return $(if ($envTag -match '^v') { $envTag } else { "v$envTag" }) }
-    $catalog = Read-PackCatalog
-    return $catalog.release.tag
+    if ($env:GITHUB_REF_NAME) {
+        $refTag = $env:GITHUB_REF_NAME
+        return $(if ($refTag -match '^v') { $refTag } else { "v$refTag" })
+    }
+
+    $repoRoot = Get-InferCoreRepoRoot
+    $cargoToml = Join-Path $repoRoot "Cargo.toml"
+    if (Test-Path $cargoToml) {
+        $versionLine = Select-String -Path $cargoToml -Pattern '^\s*version\s*=\s*"([^"]+)"' | Select-Object -First 1
+        if ($versionLine) {
+            return "v$($versionLine.Matches[0].Groups[1].Value)"
+        }
+    }
+
+    return $script:DefaultReleaseTag
 }
 
 function Get-ReleaseRepo {
     param([string]$Repo = "")
 
     if ($Repo) { return $Repo }
-    $envRepo = $env:LOCAL_INFER_RELEASE_REPO
-    if ($envRepo) { return $envRepo }
-    $catalog = Read-PackCatalog
-    return $catalog.release.repo
+    return $script:DefaultReleaseRepo
 }
 
 function Get-PackReleaseUrl {
@@ -88,36 +46,6 @@ function Get-PackReleaseUrl {
     $repo = Get-ReleaseRepo -Repo $Repo
     $vTag = Get-ReleaseTag -Tag $Tag
     return "https://github.com/$repo/releases/download/$vTag/$PackId.zip"
-}
-
-function Get-CatalogPackEntry {
-    param(
-        [Parameter(Mandatory)][string]$PackId,
-        [string]$CatalogPath = ""
-    )
-
-    $catalog = Read-PackCatalog -CatalogPath $CatalogPath
-    foreach ($entry in $catalog.packs) {
-        if ([string]$entry.id -eq $PackId) {
-            return $entry
-        }
-    }
-    return $null
-}
-
-function Get-PackDownloadUrl {
-    param(
-        [Parameter(Mandatory)][string]$PackId,
-        [string]$Repo = "",
-        [string]$Tag = "",
-        [string]$CatalogPath = ""
-    )
-
-    $entry = Get-CatalogPackEntry -PackId $PackId -CatalogPath $CatalogPath
-    if ($entry -and $entry.urls -and $entry.urls.Count -gt 0) {
-        return [string]$entry.urls[0]
-    }
-    return (Get-PackReleaseUrl -PackId $PackId -Repo $Repo -Tag $Tag)
 }
 
 function Test-PackInstalled {
@@ -198,8 +126,7 @@ function Install-PackFromDirectory {
 function Download-PackZip {
     param(
         [Parameter(Mandatory)][string]$Url,
-        [Parameter(Mandatory)][string]$DestPath,
-        [string]$ExpectedSha256 = ""
+        [Parameter(Mandatory)][string]$DestPath
     )
 
     $parent = Split-Path $DestPath -Parent
@@ -209,15 +136,5 @@ function Download-PackZip {
 
     Write-Host "downloading: $Url"
     Invoke-WebRequest -Uri $Url -OutFile $DestPath -UseBasicParsing
-
-    if ($ExpectedSha256 -and $ExpectedSha256.Trim()) {
-        $hash = (Get-FileHash -Path $DestPath -Algorithm SHA256).Hash.ToLowerInvariant()
-        $expected = $ExpectedSha256.Trim().ToLowerInvariant()
-        if ($hash -ne $expected) {
-            Remove-Item -Force $DestPath -ErrorAction SilentlyContinue
-            throw "sha256 mismatch for $Url`: expected $expected, got $hash"
-        }
-    }
-
     return $DestPath
 }

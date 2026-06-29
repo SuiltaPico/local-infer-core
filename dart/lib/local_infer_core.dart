@@ -1,4 +1,4 @@
-export 'src/pack_catalog.dart';
+export 'src/pack_release.dart';
 export 'src/embed_engine.dart';
 export 'src/exceptions.dart';
 export 'src/icon_index.dart';

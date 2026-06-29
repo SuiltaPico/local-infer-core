@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:code_assets/code_assets.dart';
 import 'package:hooks/hooks.dart';
 
-import 'catalog_config.dart';
+import 'release_config.dart';
 import 'native_release_fetch.dart';
 
 const String nativeAssetName = 'src/native_library.dart';
@@ -22,7 +22,7 @@ void main(List<String> args) async {
       return;
     }
 
-    final defaults = readCatalogReleaseDefaults(input.packageRoot);
+    final defaults = readReleaseDefaults(input.packageRoot);
     final repo =
         input.userDefines['release_repo'] as String? ?? defaults.repo;
     final tag = input.userDefines['release_tag'] as String? ?? defaults.tag;
