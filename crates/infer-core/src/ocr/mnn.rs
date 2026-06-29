@@ -78,7 +78,6 @@ impl OcrEngine {
         })
     }
 
-    /// Override manifest defaults (e.g. ui-extractor CLI flags).
     pub fn apply_config_overrides(&mut self, min_confidence: Option<f32>, max_side: Option<u32>) {
         if let Some(v) = min_confidence {
             self.config.min_confidence = v;
@@ -86,33 +85,6 @@ impl OcrEngine {
         if let Some(v) = max_side {
             self.config.max_side = v;
         }
-    }
-
-    #[deprecated(note = "use Registry::load_ocr with manifest-driven pack layout")]
-    pub fn from_model_dir(
-        model_dir: &Path,
-        config: OcrConfig,
-        runtime_config: RuntimeConfig,
-    ) -> Result<Self> {
-        let v6_det = model_dir.join("pp-ocrv6_tiny_det.mnn");
-        if v6_det.is_file() {
-            return Self::from_paths(
-                v6_det,
-                model_dir.join("pp-ocrv6_tiny_rec.mnn"),
-                model_dir.join("ppocrv6_tiny_dict.txt"),
-                config,
-                48,
-                runtime_config,
-            );
-        }
-        Self::from_paths(
-            model_dir.join("det.mnn"),
-            model_dir.join("rec.mnn"),
-            model_dir.join("ppocrv6_dict.txt"),
-            config,
-            48,
-            runtime_config,
-        )
     }
 
     pub fn recognize(&self, image: &DynamicImage) -> Result<Vec<OcrWord>> {

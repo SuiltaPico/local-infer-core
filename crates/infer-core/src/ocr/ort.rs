@@ -45,7 +45,7 @@ impl OcrEngine {
         Self::from_paths(det, rec, dict, config, runtime_config.clone())
     }
 
-    /// Legacy path-based loader (ui-extractor CLI compatibility).
+    /// Load OCR from explicit det/rec/dict paths.
     pub fn from_paths(
         det: PathBuf,
         rec: PathBuf,
@@ -70,7 +70,7 @@ impl OcrEngine {
         })
     }
 
-    /// Override manifest defaults (e.g. ui-extractor CLI flags).
+    /// Override manifest defaults at runtime.
     pub fn apply_config_overrides(&mut self, min_confidence: Option<f32>, max_side: Option<u32>) {
         if let Some(v) = min_confidence {
             self.config.min_confidence = v;
@@ -78,32 +78,6 @@ impl OcrEngine {
         if let Some(v) = max_side {
             self.config.max_side = v;
         }
-    }
-
-    /// Legacy flat-directory loader (ui-extractor CLI v5 compatibility).
-    #[deprecated(note = "use Registry::load_ocr with manifest-driven pack layout")]
-    pub fn from_model_dir(
-        model_dir: &Path,
-        config: OcrConfig,
-        runtime_config: RuntimeConfig,
-    ) -> Result<Self> {
-        let v6_det = model_dir.join("pp-ocrv6_tiny_det.onnx");
-        if v6_det.is_file() {
-            return Self::from_paths(
-                v6_det,
-                model_dir.join("pp-ocrv6_tiny_rec.onnx"),
-                model_dir.join("ppocrv6_tiny_dict.txt"),
-                config,
-                runtime_config,
-            );
-        }
-        Self::from_paths(
-            model_dir.join("pp-ocrv5_mobile_det.onnx"),
-            model_dir.join("pp-ocrv5_mobile_rec.onnx"),
-            model_dir.join("ppocrv5_dict.txt"),
-            config,
-            runtime_config,
-        )
     }
 
     pub fn recognize(&self, image: &DynamicImage) -> Result<Vec<OcrWord>> {

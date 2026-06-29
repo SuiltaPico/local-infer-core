@@ -2,8 +2,9 @@ import 'dart:io';
 
 import 'package:code_assets/code_assets.dart';
 import 'package:hooks/hooks.dart';
-import 'package:local_infer_core/src/native_release.dart';
-import 'package:local_infer_core/src/native_release_fetch.dart';
+
+import 'catalog_config.dart';
+import 'native_release_fetch.dart';
 
 const String nativeAssetName = 'src/native_library.dart';
 
@@ -21,16 +22,15 @@ void main(List<String> args) async {
       return;
     }
 
+    final defaults = readCatalogReleaseDefaults(input.packageRoot);
     final repo =
-        input.userDefines['release_repo'] as String? ?? defaultReleaseRepo;
-    final tag =
-        input.userDefines['release_tag'] as String? ?? defaultReleaseTag;
+        input.userDefines['release_repo'] as String? ?? defaults.repo;
+    final tag = input.userDefines['release_tag'] as String? ?? defaults.tag;
     final localLibUri = input.userDefines.path('local_lib');
 
     try {
       final libFile = await resolveNativeLibraryFile(
         outputDirectory: Directory.fromUri(input.outputDirectoryShared),
-        packageRoot: input.packageRoot,
         targetOS: targetOS,
         targetArchitecture: targetArchitecture,
         repo: repo,
@@ -54,14 +54,14 @@ void main(List<String> args) async {
       throw UnsupportedError(
         'local_infer_core: ${e.message ?? e}\n'
         'Supported: Windows (x64, arm64), Android (arm64, x64).\n'
-        'Android releases use backend-mnn (no ORT). Use hooks user_defines local_lib, '
-        'LOCAL_INFER_CORE_LIB, or cargo build -p infer-core-ffi --release.',
+        'Set hooks.user_defines.local_infer_core.local_lib to a built '
+        'infer_core binary, or ensure GitHub Release assets exist.',
       );
     } on HttpException catch (e) {
       throw StateError(
         'local_infer_core: failed to download native library (${e.uri}): ${e.message}\n'
-        'Build locally: cargo build -p infer-core-ffi --release\n'
-        'Or set hooks user_defines local_lib / LOCAL_INFER_CORE_LIB.',
+        'Build locally and set hooks.user_defines.local_infer_core.local_lib, '
+        'or fix network/proxy access to GitHub Releases.',
       );
     }
   });

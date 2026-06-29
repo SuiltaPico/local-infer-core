@@ -96,11 +96,11 @@ fn load_image_bytes(bytes: &[u8]) -> Result<DynamicImage, String> {
 
 fn runtime_config_from_json_ptr(json: *const c_char) -> Result<RuntimeConfig, String> {
     if json.is_null() {
-        return Ok(RuntimeConfig::from_env_or_default());
+        return Ok(RuntimeConfig::default());
     }
     let text = read_cstr(json, "runtime_config_json")?;
     if text.is_empty() {
-        Ok(RuntimeConfig::from_env_or_default())
+        Ok(RuntimeConfig::default())
     } else {
         RuntimeConfig::from_json(text).map_err(map_infer_error)
     }
@@ -585,35 +585,6 @@ pub extern "C" fn infer_icon_index_search(
         if !out_json.is_null() {
             unsafe {
                 *out_json = string_to_raw(json);
-            }
-        }
-        Ok(())
-    })
-}
-
-/// OCR plain text from image bytes using `pack_id` (legacy one-shot API).
-#[no_mangle]
-pub extern "C" fn infer_ocr_plain_text(
-    handle: *mut c_void,
-    pack_id: *const c_char,
-    data: *const u8,
-    len: usize,
-    out_text: *mut *mut c_char,
-    out_error: *mut *mut c_char,
-) -> c_int {
-    run(out_error, || {
-        let registry = registry_handle(handle)?;
-        let pack_id = read_cstr(pack_id, "pack_id")?;
-        let bytes = read_bytes(data, len)?;
-        let img = load_image_bytes(bytes)?;
-        let engine = registry
-            .registry
-            .load_ocr(pack_id)
-            .map_err(map_infer_error)?;
-        let text = engine.plain_text(&img).map_err(map_infer_error)?;
-        if !out_text.is_null() {
-            unsafe {
-                *out_text = string_to_raw(text);
             }
         }
         Ok(())

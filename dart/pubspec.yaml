@@ -1,27 +1,19 @@
 name: local_infer_core
-description: Dart/Flutter FFI for local-infer-core — manifest-driven OCR, embeddings, icon index.
+description: Flutter FFI plugin for local-infer-core — manifest-driven OCR, embeddings, icon index.
 version: 0.1.0
 repository: https://github.com/SuiltaPico/local-infer-core
 license: MIT
 
 environment:
-  sdk: ^3.4.0
+  sdk: ^3.10.0
   flutter: ">=3.16.0"
 
 platforms:
   android:
   windows:
 
-hooks:
-  user_defines:
-    local_infer_core:
-      release_repo: SuiltaPico/local-infer-core
-      release_tag: 0.1.0
-
 dependencies:
-  archive: ^4.0.0
   code_assets: ^1.2.1
-  crypto: ^3.0.0
   ffi: ^2.1.2
   flutter:
     sdk: flutter

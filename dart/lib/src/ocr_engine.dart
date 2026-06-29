@@ -163,11 +163,12 @@ class LocalOcrEngine {
   }
 
   Future<String> plainText(Uint8List imageBytes) async {
-    return nativeBindings.ocrPlainText(
-      registry: registry.nativeHandle,
-      packId: packId,
-      imageBytes: imageBytes,
-    );
+    final session = await openSession();
+    try {
+      return session.plainText(imageBytes);
+    } finally {
+      session.dispose();
+    }
   }
 
   Future<OcrRecognizeResult> recognizeTimed(

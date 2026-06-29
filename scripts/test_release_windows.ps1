@@ -56,8 +56,12 @@ public static class InferCoreReleaseSmoke {
     [DllImport("infer_core.dll", CallingConvention = CallingConvention.Cdecl)]
     public static extern void infer_registry_destroy(IntPtr handle);
     [DllImport("infer_core.dll", CallingConvention = CallingConvention.Cdecl)]
-    public static extern int infer_ocr_plain_text(
-        IntPtr handle, IntPtr packId, byte[] data, UIntPtr len, out IntPtr outText, out IntPtr outError);
+    public static extern IntPtr infer_ocr_engine_load(IntPtr handle, IntPtr packId, out IntPtr outError);
+    [DllImport("infer_core.dll", CallingConvention = CallingConvention.Cdecl)]
+    public static extern void infer_ocr_engine_destroy(IntPtr engine);
+    [DllImport("infer_core.dll", CallingConvention = CallingConvention.Cdecl)]
+    public static extern int infer_ocr_recognize_timed(
+        IntPtr engine, byte[] data, UIntPtr len, out IntPtr outJson, out IntPtr outError);
     [DllImport("infer_core.dll", CallingConvention = CallingConvention.Cdecl)]
     public static extern void infer_string_free(IntPtr s);
 }
@@ -93,25 +97,35 @@ public static class InferCoreReleaseSmoke {
             } else {
                 $bytes = [IO.File]::ReadAllBytes($SampleImage)
                 $packPtr = [Runtime.InteropServices.Marshal]::StringToHGlobalAnsi($PackId)
-                $outText = [IntPtr]::Zero
-                $outErr = [IntPtr]::Zero
-                $rc = [InferCoreReleaseSmoke]::infer_ocr_plain_text(
-                    $handle, $packPtr, $bytes, [UIntPtr]::new($bytes.Length), [ref]$outText, [ref]$outErr)
+                $engineErr = [IntPtr]::Zero
+                $engine = [InferCoreReleaseSmoke]::infer_ocr_engine_load($handle, $packPtr, [ref]$engineErr)
                 [Runtime.InteropServices.Marshal]::FreeHGlobal($packPtr)
+                if ($engine -eq [IntPtr]::Zero) {
+                    $msg = [Runtime.InteropServices.Marshal]::PtrToStringAnsi($engineErr)
+                    if ($engineErr -ne [IntPtr]::Zero) { [InferCoreReleaseSmoke]::infer_string_free($engineErr) }
+                    throw "infer_ocr_engine_load failed: $msg"
+                }
+                if ($engineErr -ne [IntPtr]::Zero) { [InferCoreReleaseSmoke]::infer_string_free($engineErr) }
+
+                $jsonPtr = [IntPtr]::Zero
+                $outErr = [IntPtr]::Zero
+                $rc = [InferCoreReleaseSmoke]::infer_ocr_recognize_timed(
+                    $engine, $bytes, [UIntPtr]::new($bytes.Length), [ref]$jsonPtr, [ref]$outErr)
+                [InferCoreReleaseSmoke]::infer_ocr_engine_destroy($engine)
                 if ($rc -ne 0) {
                     $msg = if ($outErr -ne [IntPtr]::Zero) {
                         [Runtime.InteropServices.Marshal]::PtrToStringAnsi($outErr)
                     } else { "unknown error" }
                     if ($outErr -ne [IntPtr]::Zero) { [InferCoreReleaseSmoke]::infer_string_free($outErr) }
-                    throw "infer_ocr_plain_text failed (rc=$rc): $msg"
+                    throw "infer_ocr_recognize_timed failed (rc=$rc): $msg"
                 }
-                $text = [Runtime.InteropServices.Marshal]::PtrToStringAnsi($outText)
-                [InferCoreReleaseSmoke]::infer_string_free($outText)
+                $json = [Runtime.InteropServices.Marshal]::PtrToStringAnsi($jsonPtr)
+                [InferCoreReleaseSmoke]::infer_string_free($jsonPtr)
                 if ($outErr -ne [IntPtr]::Zero) { [InferCoreReleaseSmoke]::infer_string_free($outErr) }
-                if ([string]::IsNullOrWhiteSpace($text)) {
-                    throw "infer_ocr_plain_text returned empty text"
+                if ([string]::IsNullOrWhiteSpace($json) -or $json -notmatch '"text"') {
+                    throw "infer_ocr_recognize_timed returned empty or invalid JSON"
                 }
-                $preview = if ($text.Length -gt 40) { $text.Substring(0, 40) + "..." } else { $text }
+                $preview = if ($json.Length -gt 60) { $json.Substring(0, 60) + "..." } else { $json }
                 Write-Host "[$Label] OCR ok: $preview"
             }
         }

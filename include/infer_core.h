@@ -134,14 +134,6 @@ INFER_CORE_API int32_t infer_icon_index_search(
     char **out_json,
     char **out_error);
 
-/* OCR plain text (legacy Mauchat API). */
-INFER_CORE_API int32_t infer_ocr_plain_text(
-    InferRegistry *handle,
-    const char *pack_id,
-    const uint8_t *data,
-    size_t len,
-    char **out_text,
-    char **out_error);
 
 #ifdef __cplusplus
 }

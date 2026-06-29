@@ -209,7 +209,7 @@ fn build_index(
     vision_model: &Path,
     template_size: u32,
 ) -> Result<EmbeddingIndex, String> {
-    let runtime = RuntimeConfig::from_env_or_default();
+    let runtime = RuntimeConfig::default();
     let worker_count = if runtime.prefer_gpu_single_session() {
         1
     } else {

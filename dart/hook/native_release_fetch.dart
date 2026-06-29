@@ -1,8 +1,9 @@
 import 'dart:io';
 
 import 'package:code_assets/code_assets.dart';
-import 'package:local_infer_core/src/native_release.dart';
 import 'package:path/path.dart' as p;
+
+import 'native_release.dart';
 
 Future<File> fetchNativeLibrary({
   required Directory outputDirectory,
@@ -21,7 +22,7 @@ Future<File> fetchNativeLibrary({
     assetBaseName: assetBase,
     targetOS: targetOS,
   );
-  final ext = '.${releaseArchiveExtension(targetOS)}';
+  const ext = '.zip';
   final archiveFile = File(p.join(outputDirectory.path, '$assetBase$ext'));
   final extractRoot = Directory(p.join(outputDirectory.path, assetBase));
 
@@ -31,11 +32,7 @@ Future<File> fetchNativeLibrary({
 
   if (!await archiveFile.exists()) {
     await _download(url, archiveFile);
-    await _extractArchive(
-      archiveFile: archiveFile,
-      dest: extractRoot,
-      isZip: releaseArchiveUsesZip(targetOS),
-    );
+    await _extractZip(archiveFile: archiveFile, dest: extractRoot);
   }
 
   final libRelative = targetOS == OS.android
@@ -72,12 +69,11 @@ Future<void> _download(Uri url, File dest) async {
   }
 }
 
-Future<void> _extractArchive({
+Future<void> _extractZip({
   required File archiveFile,
   required Directory dest,
-  required bool isZip,
 }) async {
-  if (isZip) {
+  if (Platform.isWindows) {
     final result = await Process.run(
       'powershell',
       [
@@ -94,18 +90,17 @@ Future<void> _extractArchive({
   }
 
   final result = await Process.run(
-    'tar',
-    ['-xzf', archiveFile.path, '-C', dest.path],
+    'unzip',
+    ['-o', archiveFile.path, '-d', dest.path],
     runInShell: true,
   );
   if (result.exitCode != 0) {
-    throw StateError('tar extract failed: ${result.stderr}');
+    throw StateError('unzip failed: ${result.stderr}');
   }
 }
 
 Future<File> resolveNativeLibraryFile({
   required Directory outputDirectory,
-  required Uri packageRoot,
   required OS targetOS,
   required Architecture targetArchitecture,
   required String repo,
@@ -120,33 +115,6 @@ Future<File> resolveNativeLibraryFile({
     return file;
   }
 
-  final envLib = Platform.environment['LOCAL_INFER_CORE_LIB'];
-  if (envLib != null && envLib.isNotEmpty) {
-    final file = File(envLib);
-    if (!await file.exists()) {
-      throw StateError('LOCAL_INFER_CORE_LIB not found: $envLib');
-    }
-    return file;
-  }
-
-  final preinstalledRelative = preinstalledLibraryRelativePath(
-    targetOS: targetOS,
-    targetArchitecture: targetArchitecture,
-  );
-  if (preinstalledRelative != null) {
-    final preinstalled = File(
-      p.join(packageRoot.toFilePath(), preinstalledRelative),
-    );
-    if (await preinstalled.exists()) {
-      return preinstalled;
-    }
-  }
-
-  final cargoOut = _cargoReleaseLibrary(packageRoot.toFilePath(), targetOS);
-  if (cargoOut != null && await File(cargoOut).exists()) {
-    return File(cargoOut);
-  }
-
   return fetchNativeLibrary(
     outputDirectory: outputDirectory,
     targetOS: targetOS,
@@ -154,10 +122,4 @@ Future<File> resolveNativeLibraryFile({
     repo: repo,
     tag: tag,
   );
-}
-
-String? _cargoReleaseLibrary(String packageRoot, OS targetOS) {
-  final repoRoot = p.normalize(p.join(packageRoot, '..'));
-  final fileName = targetOS.dylibFileName(bundledLibraryBaseName(targetOS));
-  return p.join(repoRoot, 'target', 'release', fileName);
 }

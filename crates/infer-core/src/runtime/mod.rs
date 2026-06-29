@@ -77,15 +77,6 @@ impl RuntimeConfig {
         Ok(serde_json::from_str(text)?)
     }
 
-    pub fn from_env_or_default() -> Self {
-        if let Ok(text) = std::env::var("LOCAL_INFER_RUNTIME_CONFIG") {
-            if let Ok(cfg) = Self::from_json(&text) {
-                return cfg;
-            }
-        }
-        Self::default()
-    }
-
     pub fn onnx_config(&self) -> OnnxConfig {
         self.onnx.clone().unwrap_or_default()
     }
@@ -100,17 +91,6 @@ impl RuntimeConfig {
             && !onnx.execution_providers.iter().any(|ep| ep == "auto")
         {
             return maybe_append_cpu(onnx.execution_providers, onnx.append_cpu_fallback);
-        }
-
-        if let Ok(raw) = std::env::var("LOCAL_INFER_ORT_EP") {
-            let eps: Vec<String> = raw
-                .split(',')
-                .map(|s| s.trim().to_string())
-                .filter(|s| !s.is_empty())
-                .collect();
-            if !eps.is_empty() {
-                return maybe_append_cpu(eps, onnx.append_cpu_fallback);
-            }
         }
 
         maybe_append_cpu(auto_eps(), onnx.append_cpu_fallback)

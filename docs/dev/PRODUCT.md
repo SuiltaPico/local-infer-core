@@ -56,13 +56,11 @@
 
 Rust / FFI 等价：`RuntimeConfig { onnx: Some(OnnxConfig { eps: vec![...] }) }`。
 
-#### 透传路径（优先级从高到低）
+#### 透传路径
 
-1. **显式 API** — `infer_registry_create(base_dir, runtime_config_json)` / `EngineBuilder::runtime_config(...)`
-2. **环境变量** — `LOCAL_INFER_ORT_EP=cpu,directml`（逗号分隔链；仅当 API 未传时使用）
-3. **`auto` 预设** — 均未指定时，内核按平台生成建议链（可文档化，非强制）
+**仅显式 API** — `infer_registry_create(base_dir, runtime_config_json)` / `RuntimeConfig::from_json` / `EngineBuilder::runtime_config(...)`。内核不读取环境变量。
 
-#### 支持的 EP 名称（透传值）
+#### `auto` 预设（仅 `execution_providers` 缺省或含 `"auto"` 时展开）
 
 | 名称 | 平台 | compile feature |
 |------|------|-----------------|
@@ -97,10 +95,7 @@ manifest 可含 **`runtime_hint`**（非强制），消费方可忽略：
 #### 示例
 
 ```bash
-# Mauchat 设置「省电」→ 传 ["cpu"]
-# Mauchat 设置「自动」→ 传 ["auto"] 或省略
-# 高级用户 / 脚本
-LOCAL_INFER_ORT_EP=cuda,cpu ui-extractor extract ...
+# 消费方 RuntimeConfig JSON: execution_providers = ["cpu"] 或 ["auto"]
 ```
 
 **MNN 后端**无 ORT EP 概念；对应字段为 `mnn` 段（如 `precision`、`num_thread`、`backend: cpu|opencl|vulkan`），同样透传，规则平行。
@@ -321,7 +316,7 @@ ocr.paddle.ppocr6-tiny.onnx.fp32/
 └── icons.bundled.v1.mobileclip2-s0.int8/
 ```
 
-解析顺序：显式路径 → `LOCAL_INFER_ROOT` → App 内置 assets（首次解压）。
+解析顺序：调用方传入的 `models_dir` 路径（须已含 manifest 包目录）。**内核不下载、不解压、不读环境变量。**
 
 ---
 
@@ -331,6 +326,8 @@ ocr.paddle.ppocr6-tiny.onnx.fp32/
 local-infer-core/
 ├── crates/infer-core/           # Rust 库：registry、runtime、OCR/embed adapter
 ├── crates/infer-core-ffi/       # cdylib → infer_core.dll / .so
+├── dart/                        # Flutter FFI 插件 local_infer_core
+├── include/                     # C ABI 头 infer_core.h
 ├── schema/manifest.v1.json      # JSON Schema，CI 校验
 └── tools/
     ├── pack/                    # 打 Release zip
@@ -343,31 +340,30 @@ local-infer-core/
 **Rust**
 
 ```rust
-let cfg = RuntimeConfig::from_env_or_default()?;
+let cfg = RuntimeConfig::default(); // 或 from_json / 显式构造
 let registry = Registry::open(models_dir, cfg)?;
 
-let ocr = registry.load_ocr("ocr.paddle.ppocr6-tiny.mnn.int8")?;
-ocr.plain_text(&image)?;                    // Mauchat 跨模态转写
-ocr.recognize(&image)? -> Vec<OcrWord>;     // ui-extractor 挂词
+let ocr = registry.load_ocr("ocr.paddle.ppocr6-tiny.onnx.fp32")?;
+ocr.plain_text(&image)?;
+ocr.recognize(&image)?; // -> Vec<OcrWord>
 
-embed.embed_rgb256(&crop)? -> Vec<f32>;
+embed.embed_rgb256(&crop)?; // -> Vec<f32>
 icon_index.match_embedding(&vec)?;
 ```
 
-**C FFI（Mauchat Dart）**
+**C FFI**
 
-- `infer_registry_create(base_dir, runtime_config_json)` — **EP 在此透传**
-- `infer_registry_load_pack`
-- `infer_ocr_recognize_bytes` / `infer_ocr_plain_text`
+- `infer_registry_create(base_dir, runtime_config_json)`
+- `infer_ocr_engine_load` / `infer_ocr_recognize_timed`
 - `infer_embed_*` / `infer_icon_index_*`
 
-**Dart 包 `local_infer_core`（本仓库 `dart/`）**
+**Dart 包 `local_infer_core`（本仓库 `dart/`，Flutter FFI 插件）**
 
-- Native Assets hook：仅 `infer_core.dll` / `libinfer_core.so`（**不含**模型 zip）
-- 封装上述 FFI + `ModelCatalog`（下载/解压/校验 pack）+ `RuntimeConfig` 类型
-- Mauchat 跨模态转写 **只依赖此包**；UI 自动化另加 [ui_extractor](../../../ui-extractor/PRODUCT.md) dart 包
+- Dart FFI + Registry/Session API（`lib/` 不读环境变量）
+- **Native 库**：build hook 从 Release 下载并 bundle，或根应用 `local_lib` 显式指定
+- **模型包**：调用方从 [GitHub Releases](https://github.com/SuiltaPico/local-infer-core/releases) 解压到 `{models_dir}/{pack_id}/`；`PackCatalog.loadFromAssetBundle()` 读官方清单
 
-实现见仓库 [`dart/`](../../dart/) 与 [README](../../README.md)。
+实现见 [`dart/`](../../dart/) 与 [DART_API.md](./DART_API.md)。
 
 ---
 

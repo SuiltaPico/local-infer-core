@@ -4,356 +4,159 @@ import 'dart:typed_data';
 import 'package:ffi/ffi.dart';
 
 import 'exceptions.dart';
+import 'ffi_native.dart';
+import 'ffi_types.dart';
 import 'native_library.dart';
 
 final class _Bindings {
-  _Bindings._();
+  _Bindings._() {
+    if (usesBundledNativeAsset) {
+      _initBundled();
+    } else {
+      _initDynamicLibrary(localInferCoreLibrary);
+    }
+  }
 
   static final _Bindings instance = _Bindings._();
 
-  late final DynamicLibrary _lib = openLocalInferCoreLibrary();
+  late final InferCoreVersionFn _version;
+  InferRuntimeBackendsJsonFn? _runtimeBackendsJsonFn;
+  late final InferStringFreeFn _stringFree;
+  late final InferFloatsFreeFn _floatsFree;
+  late final InferRegistryCreateFn _registryCreate;
+  late final InferRegistryDestroyFn _registryDestroy;
+  late final InferRegistryPackIdsJsonFn _registryPackIdsJson;
+  late final InferRegistryManifestJsonFn _registryManifestJson;
+  late final InferOcrEngineLoadFn _ocrEngineLoad;
+  late final InferOcrEngineDestroyFn _ocrEngineDestroy;
+  late final InferOcrEngineApplyConfigFn _ocrEngineApplyConfig;
+  late final InferOcrRecognizeTimedFn _ocrRecognizeTimed;
+  late final InferEmbedEngineLoadFn _embedEngineLoad;
+  late final InferEmbedEngineLoadPathFn _embedEngineLoadPath;
+  late final InferEmbedEngineDestroyFn _embedEngineDestroy;
+  late final InferEmbedRgb256Fn _embedRgb256;
+  late final InferIconIndexLoadFn _iconIndexLoad;
+  late final InferIconIndexDestroyFn _iconIndexDestroy;
+  late final InferIconIndexMatchEmbeddingFn _iconIndexMatchEmbedding;
+  late final InferIconIndexSearchFn _iconIndexSearch;
 
-  int Function(Pointer<Pointer<Utf8>>)? _runtimeBackendsJsonLookup;
+  void _initBundled() {
+    _version = nativeInferCoreVersion;
+    _runtimeBackendsJsonFn = nativeInferRuntimeBackendsJson;
+    _stringFree = nativeInferStringFree;
+    _floatsFree = nativeInferFloatsFree;
+    _registryCreate = nativeInferRegistryCreate;
+    _registryDestroy = nativeInferRegistryDestroy;
+    _registryPackIdsJson = nativeInferRegistryPackIdsJson;
+    _registryManifestJson = nativeInferRegistryManifestJson;
+    _ocrEngineLoad = nativeInferOcrEngineLoad;
+    _ocrEngineDestroy = nativeInferOcrEngineDestroy;
+    _ocrEngineApplyConfig = nativeInferOcrEngineApplyConfig;
+    _ocrRecognizeTimed = nativeInferOcrRecognizeTimed;
+    _embedEngineLoad = nativeInferEmbedEngineLoad;
+    _embedEngineLoadPath = nativeInferEmbedEngineLoadPath;
+    _embedEngineDestroy = nativeInferEmbedEngineDestroy;
+    _embedRgb256 = nativeInferEmbedRgb256;
+    _iconIndexLoad = nativeInferIconIndexLoad;
+    _iconIndexDestroy = nativeInferIconIndexDestroy;
+    _iconIndexMatchEmbedding = nativeInferIconIndexMatchEmbedding;
+    _iconIndexSearch = nativeInferIconIndexSearch;
+  }
 
-  int Function(Pointer<Pointer<Utf8>>)? get _runtimeBackendsJsonFn {
-    _runtimeBackendsJsonLookup ??= () {
+  void _initDynamicLibrary(DynamicLibrary lib) {
+    _runtimeBackendsJsonFn = () {
       try {
-        return _lib.lookupFunction<
-            Int32 Function(Pointer<Pointer<Utf8>>),
-            int Function(Pointer<Pointer<Utf8>>)>(
+        return lib.lookupFunction<
+            InferRuntimeBackendsJsonNative, InferRuntimeBackendsJsonFn>(
           'infer_runtime_backends_json',
         );
       } on Object {
         return null;
       }
     }();
-    return _runtimeBackendsJsonLookup;
+    _version = lib.lookupFunction<InferCoreVersionFn, InferCoreVersionFn>(
+      'infer_core_version',
+    );
+    _stringFree = lib.lookupFunction<InferStringFreeNative, InferStringFreeFn>(
+      'infer_string_free',
+    );
+    _floatsFree = lib.lookupFunction<InferFloatsFreeNative, InferFloatsFreeFn>(
+      'infer_floats_free',
+    );
+    _registryCreate =
+        lib.lookupFunction<InferRegistryCreateFn, InferRegistryCreateFn>(
+      'infer_registry_create',
+    );
+    _registryDestroy =
+        lib.lookupFunction<InferVoidHandleNative, InferRegistryDestroyFn>(
+      'infer_registry_destroy',
+    );
+    _registryPackIdsJson = lib.lookupFunction<
+        InferRegistryPackIdsJsonNative, InferRegistryPackIdsJsonFn>(
+      'infer_registry_pack_ids_json',
+    );
+    _registryManifestJson = lib.lookupFunction<
+        InferRegistryManifestJsonNative, InferRegistryManifestJsonFn>(
+      'infer_registry_manifest_json',
+    );
+    _ocrEngineLoad =
+        lib.lookupFunction<InferOcrEngineLoadFn, InferOcrEngineLoadFn>(
+      'infer_ocr_engine_load',
+    );
+    _ocrEngineDestroy =
+        lib.lookupFunction<InferVoidHandleNative, InferOcrEngineDestroyFn>(
+      'infer_ocr_engine_destroy',
+    );
+    _ocrEngineApplyConfig = lib.lookupFunction<
+        InferOcrEngineApplyConfigNative, InferOcrEngineApplyConfigFn>(
+      'infer_ocr_engine_apply_config',
+    );
+    _ocrRecognizeTimed = lib.lookupFunction<
+        InferOcrRecognizeTimedNative, InferOcrRecognizeTimedFn>(
+      'infer_ocr_recognize_timed',
+    );
+    _embedEngineLoad =
+        lib.lookupFunction<InferEmbedEngineLoadFn, InferEmbedEngineLoadFn>(
+      'infer_embed_engine_load',
+    );
+    _embedEngineLoadPath = lib.lookupFunction<
+        InferEmbedEngineLoadPathFn, InferEmbedEngineLoadPathFn>(
+      'infer_embed_engine_load_path',
+    );
+    _embedEngineDestroy =
+        lib.lookupFunction<InferVoidHandleNative, InferEmbedEngineDestroyFn>(
+      'infer_embed_engine_destroy',
+    );
+    _embedRgb256 =
+        lib.lookupFunction<InferEmbedRgb256Native, InferEmbedRgb256Fn>(
+      'infer_embed_rgb256',
+    );
+    _iconIndexLoad =
+        lib.lookupFunction<InferIconIndexLoadFn, InferIconIndexLoadFn>(
+      'infer_icon_index_load',
+    );
+    _iconIndexDestroy =
+        lib.lookupFunction<InferVoidHandleNative, InferIconIndexDestroyFn>(
+      'infer_icon_index_destroy',
+    );
+    _iconIndexMatchEmbedding = lib.lookupFunction<
+        InferIconIndexMatchEmbeddingNative, InferIconIndexMatchEmbeddingFn>(
+      'infer_icon_index_match_embedding',
+    );
+    _iconIndexSearch = lib.lookupFunction<
+        InferIconIndexSearchNative, InferIconIndexSearchFn>(
+      'infer_icon_index_search',
+    );
   }
 
-  late final Pointer<Utf8> Function() _version =
-      _lib.lookupFunction<Pointer<Utf8> Function(), Pointer<Utf8> Function()>(
-    'infer_core_version',
-  );
-
-  late final void Function(Pointer<Utf8>) _stringFree = _lib.lookupFunction<
-      Void Function(Pointer<Utf8>), void Function(Pointer<Utf8>)>(
-    'infer_string_free',
-  );
-
-  late final void Function(Pointer<Float>, int) _floatsFree =
-      _lib.lookupFunction<Void Function(Pointer<Float>, IntPtr),
-          void Function(Pointer<Float>, int)>(
-    'infer_floats_free',
-  );
-
-  late final Pointer<Void> Function(
-    Pointer<Utf8>,
-    Pointer<Utf8>,
-    Pointer<Pointer<Utf8>>,
-  ) _registryCreate = _lib.lookupFunction<
-      Pointer<Void> Function(
-        Pointer<Utf8>,
-        Pointer<Utf8>,
-        Pointer<Pointer<Utf8>>,
-      ),
-      Pointer<Void> Function(
-        Pointer<Utf8>,
-        Pointer<Utf8>,
-        Pointer<Pointer<Utf8>>,
-      )>(
-    'infer_registry_create',
-  );
-
-  late final void Function(Pointer<Void>) _registryDestroy =
-      _lib.lookupFunction<Void Function(Pointer<Void>),
-          void Function(Pointer<Void>)>(
-    'infer_registry_destroy',
-  );
-
-  late final int Function(
-    Pointer<Void>,
-    Pointer<Pointer<Utf8>>,
-    Pointer<Pointer<Utf8>>,
-  ) _registryPackIdsJson = _lib.lookupFunction<
-      Int32 Function(
-        Pointer<Void>,
-        Pointer<Pointer<Utf8>>,
-        Pointer<Pointer<Utf8>>,
-      ),
-      int Function(
-        Pointer<Void>,
-        Pointer<Pointer<Utf8>>,
-        Pointer<Pointer<Utf8>>,
-      )>(
-    'infer_registry_pack_ids_json',
-  );
-
-  late final int Function(
-    Pointer<Void>,
-    Pointer<Utf8>,
-    Pointer<Pointer<Utf8>>,
-    Pointer<Pointer<Utf8>>,
-  ) _registryManifestJson = _lib.lookupFunction<
-      Int32 Function(
-        Pointer<Void>,
-        Pointer<Utf8>,
-        Pointer<Pointer<Utf8>>,
-        Pointer<Pointer<Utf8>>,
-      ),
-      int Function(
-        Pointer<Void>,
-        Pointer<Utf8>,
-        Pointer<Pointer<Utf8>>,
-        Pointer<Pointer<Utf8>>,
-      )>(
-    'infer_registry_manifest_json',
-  );
-
-  late final int Function(
-    Pointer<Void>,
-    Pointer<Utf8>,
-    Pointer<Uint8>,
-    int,
-    Pointer<Pointer<Utf8>>,
-    Pointer<Pointer<Utf8>>,
-  ) _ocrPlainText = _lib.lookupFunction<
-      Int32 Function(
-        Pointer<Void>,
-        Pointer<Utf8>,
-        Pointer<Uint8>,
-        IntPtr,
-        Pointer<Pointer<Utf8>>,
-        Pointer<Pointer<Utf8>>,
-      ),
-      int Function(
-        Pointer<Void>,
-        Pointer<Utf8>,
-        Pointer<Uint8>,
-        int,
-        Pointer<Pointer<Utf8>>,
-        Pointer<Pointer<Utf8>>,
-      )>(
-    'infer_ocr_plain_text',
-  );
-
-  late final Pointer<Void> Function(
-    Pointer<Void>,
-    Pointer<Utf8>,
-    Pointer<Pointer<Utf8>>,
-  ) _ocrEngineLoad = _lib.lookupFunction<
-      Pointer<Void> Function(
-        Pointer<Void>,
-        Pointer<Utf8>,
-        Pointer<Pointer<Utf8>>,
-      ),
-      Pointer<Void> Function(
-        Pointer<Void>,
-        Pointer<Utf8>,
-        Pointer<Pointer<Utf8>>,
-      )>(
-    'infer_ocr_engine_load',
-  );
-
-  late final void Function(Pointer<Void>) _ocrEngineDestroy =
-      _lib.lookupFunction<Void Function(Pointer<Void>),
-          void Function(Pointer<Void>)>(
-    'infer_ocr_engine_destroy',
-  );
-
-  late final int Function(
-    Pointer<Void>,
-    double,
-    int,
-    Pointer<Pointer<Utf8>>,
-  ) _ocrEngineApplyConfig = _lib.lookupFunction<
-      Int32 Function(
-        Pointer<Void>,
-        Float,
-        Uint32,
-        Pointer<Pointer<Utf8>>,
-      ),
-      int Function(
-        Pointer<Void>,
-        double,
-        int,
-        Pointer<Pointer<Utf8>>,
-      )>(
-    'infer_ocr_engine_apply_config',
-  );
-
-  late final int Function(
-    Pointer<Void>,
-    Pointer<Uint8>,
-    int,
-    Pointer<Pointer<Utf8>>,
-    Pointer<Pointer<Utf8>>,
-  ) _ocrRecognizeTimed = _lib.lookupFunction<
-      Int32 Function(
-        Pointer<Void>,
-        Pointer<Uint8>,
-        IntPtr,
-        Pointer<Pointer<Utf8>>,
-        Pointer<Pointer<Utf8>>,
-      ),
-      int Function(
-        Pointer<Void>,
-        Pointer<Uint8>,
-        int,
-        Pointer<Pointer<Utf8>>,
-        Pointer<Pointer<Utf8>>,
-      )>(
-    'infer_ocr_recognize_timed',
-  );
-
-  late final Pointer<Void> Function(
-    Pointer<Void>,
-    Pointer<Utf8>,
-    Pointer<Pointer<Utf8>>,
-  ) _embedEngineLoad = _lib.lookupFunction<
-      Pointer<Void> Function(
-        Pointer<Void>,
-        Pointer<Utf8>,
-        Pointer<Pointer<Utf8>>,
-      ),
-      Pointer<Void> Function(
-        Pointer<Void>,
-        Pointer<Utf8>,
-        Pointer<Pointer<Utf8>>,
-      )>(
-    'infer_embed_engine_load',
-  );
-
-  late final Pointer<Void> Function(
-    Pointer<Utf8>,
-    Pointer<Utf8>,
-    Pointer<Pointer<Utf8>>,
-  ) _embedEngineLoadPath = _lib.lookupFunction<
-      Pointer<Void> Function(
-        Pointer<Utf8>,
-        Pointer<Utf8>,
-        Pointer<Pointer<Utf8>>,
-      ),
-      Pointer<Void> Function(
-        Pointer<Utf8>,
-        Pointer<Utf8>,
-        Pointer<Pointer<Utf8>>,
-      )>(
-    'infer_embed_engine_load_path',
-  );
-
-  late final void Function(Pointer<Void>) _embedEngineDestroy =
-      _lib.lookupFunction<Void Function(Pointer<Void>),
-          void Function(Pointer<Void>)>(
-    'infer_embed_engine_destroy',
-  );
-
-  late final Pointer<Float> Function(
-    Pointer<Void>,
-    Pointer<Uint8>,
-    int,
-    Pointer<IntPtr>,
-    Pointer<Pointer<Utf8>>,
-  ) _embedRgb256 = _lib.lookupFunction<
-      Pointer<Float> Function(
-        Pointer<Void>,
-        Pointer<Uint8>,
-        IntPtr,
-        Pointer<IntPtr>,
-        Pointer<Pointer<Utf8>>,
-      ),
-      Pointer<Float> Function(
-        Pointer<Void>,
-        Pointer<Uint8>,
-        int,
-        Pointer<IntPtr>,
-        Pointer<Pointer<Utf8>>,
-      )>(
-    'infer_embed_rgb256',
-  );
-
-  late final Pointer<Void> Function(
-    Pointer<Void>,
-    Pointer<Utf8>,
-    Pointer<Pointer<Utf8>>,
-  ) _iconIndexLoad = _lib.lookupFunction<
-      Pointer<Void> Function(
-        Pointer<Void>,
-        Pointer<Utf8>,
-        Pointer<Pointer<Utf8>>,
-      ),
-      Pointer<Void> Function(
-        Pointer<Void>,
-        Pointer<Utf8>,
-        Pointer<Pointer<Utf8>>,
-      )>(
-    'infer_icon_index_load',
-  );
-
-  late final void Function(Pointer<Void>) _iconIndexDestroy =
-      _lib.lookupFunction<Void Function(Pointer<Void>),
-          void Function(Pointer<Void>)>(
-    'infer_icon_index_destroy',
-  );
-
-  late final int Function(
-    Pointer<Void>,
-    Pointer<Float>,
-    int,
-    double,
-    Pointer<Pointer<Utf8>>,
-    Pointer<Pointer<Utf8>>,
-  ) _iconIndexMatchEmbedding = _lib.lookupFunction<
-      Int32 Function(
-        Pointer<Void>,
-        Pointer<Float>,
-        IntPtr,
-        Float,
-        Pointer<Pointer<Utf8>>,
-        Pointer<Pointer<Utf8>>,
-      ),
-      int Function(
-        Pointer<Void>,
-        Pointer<Float>,
-        int,
-        double,
-        Pointer<Pointer<Utf8>>,
-        Pointer<Pointer<Utf8>>,
-      )>(
-    'infer_icon_index_match_embedding',
-  );
-
-  late final int Function(
-    Pointer<Void>,
-    Pointer<Float>,
-    int,
-    int,
-    Pointer<Pointer<Utf8>>,
-    Pointer<Pointer<Utf8>>,
-  ) _iconIndexSearch = _lib.lookupFunction<
-      Int32 Function(
-        Pointer<Void>,
-        Pointer<Float>,
-        IntPtr,
-        IntPtr,
-        Pointer<Pointer<Utf8>>,
-        Pointer<Pointer<Utf8>>,
-      ),
-      int Function(
-        Pointer<Void>,
-        Pointer<Float>,
-        int,
-        int,
-        Pointer<Pointer<Utf8>>,
-        Pointer<Pointer<Utf8>>,
-      )>(
-    'infer_icon_index_search',
-  );
+  int Function(Pointer<Pointer<Utf8>>)? get _runtimeBackendsJsonFnOrNull =>
+      _runtimeBackendsJsonFn;
 
   String get version => _version().toDartString();
 
   /// Returns JSON from native when supported; null on older libraries.
   String? runtimeBackendsJson() {
-    final fn = _runtimeBackendsJsonFn;
+    final fn = _runtimeBackendsJsonFnOrNull;
     if (fn == null) return null;
     final jsonPtr = calloc<Pointer<Utf8>>();
     try {
@@ -424,37 +227,6 @@ final class _Bindings {
     } finally {
       calloc.free(packPtr);
       calloc.free(jsonPtr);
-      calloc.free(errorPtr);
-    }
-  }
-
-  String ocrPlainText({
-    required Pointer<Void> registry,
-    required String packId,
-    required Uint8List imageBytes,
-  }) {
-    final packPtr = packId.toNativeUtf8();
-    final dataPtr = calloc<Uint8>(imageBytes.length);
-    final textPtr = calloc<Pointer<Utf8>>();
-    final errorPtr = calloc<Pointer<Utf8>>();
-    try {
-      dataPtr.asTypedList(imageBytes.length).setAll(0, imageBytes);
-      final rc = _ocrPlainText(
-        registry,
-        packPtr,
-        dataPtr,
-        imageBytes.length,
-        textPtr,
-        errorPtr,
-      );
-      if (rc != 0) {
-        throw LocalInferException(_takeOwnedString(errorPtr.value));
-      }
-      return _takeOwnedString(textPtr.value);
-    } finally {
-      calloc.free(packPtr);
-      calloc.free(dataPtr);
-      calloc.free(textPtr);
       calloc.free(errorPtr);
     }
   }

@@ -122,12 +122,17 @@ cargo test -p infer-core -p infer-core-ffi
 - `crates/infer-core`：核心能力（registry/runtime/ocr/embed/icon_index）
 - `crates/infer-core-ffi`：C ABI 动态库（`infer_core.dll` / `libinfer_core.so`）
 - `crates/mnn-sys`：MNN 绑定与构建桥接
+- `dart/`：Flutter FFI 插件（`local_infer_core`）
+- `include/`：C ABI 头文件（`infer_core.h`）
 - `scripts/`：模型下载、MNN 构建、发布脚本
 
 ## 文档入口
 
 | 文档 | 用途 |
 |------|------|
-| [docs/dev/PRODUCT.md](docs/dev/PRODUCT.md) | 产品目标、对外契约、包规范 |
+| [docs/dev/PRODUCT.md](docs/dev/PRODUCT.md) | 产品目标、模型包契约 |
+| [docs/dev/RUST_API.md](docs/dev/RUST_API.md) | Rust 库 API |
+| [docs/dev/FFI_API.md](docs/dev/FFI_API.md) | C ABI |
+| [docs/dev/DART_API.md](docs/dev/DART_API.md) | Flutter FFI 插件（hook bundle native；模型 zip 调用方安装） |
 
 相关项目：[ui-extractor](../ui-extractor/PRODUCT.md)
