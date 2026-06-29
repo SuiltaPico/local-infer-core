@@ -46,10 +46,15 @@ function Convert-OnnxToMnn {
     if ($WeightQuantBits -gt 0) {
         $args += @("--weightQuantBits", "$WeightQuantBits")
     }
+    # CI runners have ~14 GB RAM; limit converter threads to reduce peak working set.
+    if ($env:CI -eq "true") {
+        $args += @("--threadNum", "1")
+    }
 
     Write-Host "  converting: $(Split-Path $OnnxPath -Leaf) -> $(Split-Path $MnnPath -Leaf)"
-    & $MnnConvert @args
-    $exitCode = $LASTEXITCODE
+    # Run each convert in a fresh process so native heap is fully released between det/rec.
+    $proc = Start-Process -FilePath $MnnConvert -ArgumentList $args -Wait -PassThru -NoNewWindow
+    $exitCode = $proc.ExitCode
 
     # mnnconvert on Windows may crash during telemetry cleanup after a successful convert (exit 0xC0000005).
     if (-not (Test-Path $MnnPath) -or (Get-Item $MnnPath).Length -eq 0) {

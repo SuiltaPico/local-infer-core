@@ -7,6 +7,8 @@ license.workspace = true
 
 [features]
 default = ["backend-ort"]
+# Type/manifest/runtime only — no ORT/MNN backend (for ui-extractor path dep).
+types-only = []
 backend-ort = ["dep:ort", "dep:oar-ocr", "ort-directml"]
 backend-mnn = ["dep:mnn", "dep:mnn-sys", "dep:imageproc"]
 ort-directml = ["ort/directml", "oar-ocr/directml"]

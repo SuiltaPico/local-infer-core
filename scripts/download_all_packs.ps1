@@ -17,17 +17,18 @@ Write-Host "=== PP-OCRv6 packs ==="
 Write-Host "=== MobileCLIP2 embed packs ==="
 & (Join-Path $PSScriptRoot "download_embed_all.ps1")
 
-if (-not $SkipIcons) {
-    Write-Host "=== icons.bundled packs (this may take several minutes) ==="
-    & (Join-Path $RepoRoot "tools\icon-index\build_bundled.ps1") -Quant all
-}
-
+# MNN conversion before icons — mnnconvert is memory-heavy; icon index-build loads ORT + ~15k PNGs.
 if (-not $SkipMnn) {
     Write-Host "=== MNN packs (ONNX -> MNN conversion) ==="
     $mnnBuildArgs = @{}
     if ($SkipMedium) { $mnnBuildArgs.SkipMedium = $true }
     if ($ForceMnn) { $mnnBuildArgs.Force = $true }
     & (Join-Path $PSScriptRoot "build_all_mnn_packs.ps1") @mnnBuildArgs
+}
+
+if (-not $SkipIcons) {
+    Write-Host "=== icons.bundled packs (this may take several minutes) ==="
+    & (Join-Path $RepoRoot "tools\icon-index\build_bundled.ps1") -Quant all
 }
 
 Write-Host "All requested packs ready."

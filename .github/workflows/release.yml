@@ -127,14 +127,25 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Download model packs
+      - name: Download ONNX model packs
+        shell: pwsh
+        run: |
+          $args = @('-SkipMnn', '-SkipIcons')
+          if ('${{ inputs.skip_medium }}' -eq 'true') { $args += '-SkipMedium' }
+          ./scripts/download_all_packs.ps1 @args
+
+      - name: Build MNN model packs
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.skip_mnn != true }}
         shell: pwsh
         run: |
           $args = @()
           if ('${{ inputs.skip_medium }}' -eq 'true') { $args += '-SkipMedium' }
-          if ('${{ inputs.skip_icons }}' -eq 'true') { $args += '-SkipIcons' }
-          if ('${{ inputs.skip_mnn }}' -eq 'true') { $args += '-SkipMnn' }
-          ./scripts/download_all_packs.ps1 @args
+          ./scripts/build_all_mnn_packs.ps1 @args
+
+      - name: Build icons bundled packs
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.skip_icons != true }}
+        shell: pwsh
+        run: ./tools/icon-index/build_bundled.ps1 -Quant all
 
       - name: Package all model packs
         shell: pwsh
