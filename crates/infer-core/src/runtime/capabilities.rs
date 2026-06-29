@@ -10,9 +10,13 @@ pub fn backend_kind() -> &'static str {
     {
         "onnx"
     }
-    #[cfg(feature = "backend-mnn")]
+    #[cfg(all(feature = "backend-mnn", not(feature = "backend-ort")))]
     {
         "mnn"
+    }
+    #[cfg(feature = "types-only")]
+    {
+        "none"
     }
 }
 
@@ -22,9 +26,13 @@ pub fn available_backends() -> Vec<String> {
     {
         ort_available_backends()
     }
-    #[cfg(feature = "backend-mnn")]
+    #[cfg(all(feature = "backend-mnn", not(feature = "backend-ort")))]
     {
         mnn_available_backends()
+    }
+    #[cfg(feature = "types-only")]
+    {
+        vec![]
     }
 }
 
@@ -68,6 +76,7 @@ mod tests {
 
     #[test]
     fn cpu_is_always_available() {
+        #[cfg(not(feature = "types-only"))]
         assert!(available_backends().iter().any(|b| b == "cpu"));
     }
 }
