@@ -107,23 +107,61 @@ jobs:
     outputs:
       build: ${{ steps.model_pack_strategy.outputs.build }}
       tag: ${{ steps.model_pack_strategy.outputs.tag }}
+      cache_tag: ${{ steps.model_pack_strategy.outputs.cache_tag }}
     steps:
       - name: Resolve model pack strategy
         id: model_pack_strategy
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
+          $repo = '${{ github.repository }}'
           $build = $false
-          if ('${{ github.event_name }}' -eq 'workflow_dispatch' -and '${{ inputs.build_model_packs }}' -eq 'true') {
-            $build = $true
+          $cacheTag = 'model-packs-latest'
+
+          if ('${{ github.event_name }}' -eq 'workflow_dispatch') {
+            if ('${{ inputs.build_model_packs }}' -eq 'true') { $build = $true }
+            if ('${{ inputs.model_packs_tag }}' -ne '') { $cacheTag = '${{ inputs.model_packs_tag }}' }
           }
 
-          $tag = 'model-packs-latest'
-          if ('${{ github.event_name }}' -eq 'workflow_dispatch' -and '${{ inputs.model_packs_tag }}' -ne '') {
-            $tag = '${{ inputs.model_packs_tag }}'
+          function Test-ReleaseHasModelPacks([string]$releaseTag) {
+            gh release view $releaseTag --repo $repo *> $null
+            if ($LASTEXITCODE -ne 0) { return $false }
+            $names = gh release view $releaseTag --repo $repo --json assets -q '.assets[].name'
+            if (-not $names) { return $false }
+            return @($names | Where-Object { $_ -like 'ocr.*.zip' }).Count -gt 0
+          }
+
+          $downloadTag = $cacheTag
+          if (-not $build) {
+            if (-not (Test-ReleaseHasModelPacks $downloadTag)) {
+              Write-Host "Release '$downloadTag' not found; searching fallback..."
+              $fallback = $null
+              $releases = gh release list --repo $repo --limit 50 --json tagName,isDraft,isPrerelease | ConvertFrom-Json
+              foreach ($release in $releases) {
+                if ($release.isDraft -or $release.isPrerelease) { continue }
+                if ($release.tagName -eq '${{ github.ref_name }}') { continue }
+                if (Test-ReleaseHasModelPacks $release.tagName) {
+                  $fallback = $release.tagName
+                  break
+                }
+              }
+
+              if ($fallback) {
+                Write-Host "Reusing model packs from release $fallback"
+                $downloadTag = $fallback
+              } elseif ('${{ github.event_name }}' -eq 'push') {
+                Write-Host 'No reusable model packs found; building once to bootstrap cache'
+                $build = $true
+              } else {
+                throw "Release '$cacheTag' not found and no fallback release contains model packs"
+              }
+            }
           }
 
           "build=$($build.ToString().ToLower())" >> $env:GITHUB_OUTPUT
-          "tag=$tag" >> $env:GITHUB_OUTPUT
+          "tag=$downloadTag" >> $env:GITHUB_OUTPUT
+          "cache_tag=$cacheTag" >> $env:GITHUB_OUTPUT
 
       - uses: actions/checkout@v6
         if: ${{ steps.model_pack_strategy.outputs.build == 'true' }}
@@ -223,7 +261,7 @@ jobs:
 
   publish-model-packs-cache:
     needs: [prepare-model-packs]
-    if: ${{ github.event_name == 'workflow_dispatch' && needs.prepare-model-packs.outputs.build == 'true' }}
+    if: ${{ needs.prepare-model-packs.outputs.build == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v7
@@ -234,7 +272,7 @@ jobs:
       - name: Create or update reusable model pack release
         env:
           GH_TOKEN: ${{ github.token }}
-          MODEL_PACKS_TAG: ${{ needs.prepare-model-packs.outputs.tag }}
+          MODEL_PACKS_TAG: ${{ needs.prepare-model-packs.outputs.cache_tag }}
         run: |
           if gh release view "$MODEL_PACKS_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$MODEL_PACKS_TAG" dist/* --repo "$GITHUB_REPOSITORY" --clobber
