@@ -1,40 +1,38 @@
-#[cfg(feature = "backend-ort")]
-use super::ort;
-
-#[cfg(feature = "backend-mnn")]
-use mnn_sys::MNNForwardType;
-
 /// Primary runtime family compiled into this build.
 pub fn backend_kind() -> &'static str {
-    #[cfg(feature = "backend-ort")]
-    {
-        "onnx"
-    }
-    #[cfg(all(feature = "backend-mnn", not(feature = "backend-ort")))]
-    {
-        "mnn"
-    }
-    #[cfg(feature = "types-only")]
-    {
+    if cfg!(feature = "types-only") {
         "none"
+    } else if cfg!(feature = "backend-mnn") {
+        "mnn"
+    } else {
+        "onnx"
     }
 }
 
 /// Execution providers (ORT) or MNN backends available on this device/build.
 pub fn available_backends() -> Vec<String> {
+    if cfg!(feature = "types-only") {
+        return vec![];
+    }
     #[cfg(feature = "backend-ort")]
     {
-        ort_available_backends()
+        return ort_available_backends();
     }
     #[cfg(all(feature = "backend-mnn", not(feature = "backend-ort")))]
     {
-        mnn_available_backends()
+        return mnn_available_backends();
     }
-    #[cfg(feature = "types-only")]
+    #[cfg(not(any(feature = "backend-ort", feature = "backend-mnn")))]
     {
         vec![]
     }
 }
+
+#[cfg(feature = "backend-ort")]
+use super::ort;
+
+#[cfg(feature = "backend-mnn")]
+use mnn_sys::MNNForwardType;
 
 #[cfg(feature = "backend-ort")]
 fn ort_available_backends() -> Vec<String> {
@@ -76,7 +74,9 @@ mod tests {
 
     #[test]
     fn cpu_is_always_available() {
-        #[cfg(not(feature = "types-only"))]
+        if cfg!(feature = "types-only") {
+            return;
+        }
         assert!(available_backends().iter().any(|b| b == "cpu"));
     }
 }
