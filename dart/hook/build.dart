@@ -5,6 +5,7 @@ import 'package:hooks/hooks.dart';
 
 import 'release_config.dart';
 import 'native_release_fetch.dart';
+import 'supported_target.dart';
 
 const String nativeAssetName = 'src/native_library.dart';
 
@@ -19,6 +20,10 @@ void main(List<String> args) async {
     final targetArchitecture = code.targetArchitecture;
 
     if (input.userDefines['skip_download'] == true) {
+      return;
+    }
+
+    if (!isBundledNativeTargetSupported(targetOS, targetArchitecture)) {
       return;
     }
 
@@ -38,13 +43,12 @@ void main(List<String> args) async {
         localLib: localLibUri?.toFilePath(),
       );
 
-      output.assets.code.add(
-        CodeAsset(
-          package: input.packageName,
-          name: nativeAssetName,
-          linkMode: DynamicLoadingBundled(),
-          file: libFile.uri,
-        ),
+      registerBundledNativeCodeAssets(
+        addAsset: output.assets.code.add,
+        packageName: input.packageName,
+        primaryAssetName: nativeAssetName,
+        primaryLib: libFile,
+        targetOS: targetOS,
       );
 
       if (Platform.isLinux || Platform.isMacOS) {
