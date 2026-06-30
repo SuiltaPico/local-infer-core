@@ -240,6 +240,8 @@ pub extern "C" fn infer_registry_create(
 #[no_mangle]
 pub unsafe extern "C" fn infer_registry_destroy(handle: *mut c_void) {
     if !handle.is_null() {
+        #[cfg(all(feature = "backend-mnn", not(feature = "backend-ort")))]
+        infer_core_lib::ocr::clear_engine_cache();
         drop(Box::from_raw(handle as *mut RegistryHandle));
     }
 }

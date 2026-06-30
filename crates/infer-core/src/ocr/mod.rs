@@ -77,7 +77,7 @@ pub use ort::OcrEngine;
 #[cfg(all(feature = "backend-mnn", not(feature = "backend-ort")))]
 mod mnn;
 #[cfg(all(feature = "backend-mnn", not(feature = "backend-ort")))]
-pub use mnn::OcrEngine;
+pub use mnn::{clear_engine_cache, OcrEngine};
 
 #[cfg(test)]
 mod tests {

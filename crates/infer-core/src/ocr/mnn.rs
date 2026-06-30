@@ -125,10 +125,11 @@ impl OcrEngine {
         let (rgb, coord_scale) = resize_rgb_for_ocr(rgb, self.config.max_side);
 
         let key = format!(
-            "{}|{}|{}",
+            "{}|{}|{}|{}",
             self.det.display(),
             self.rec.display(),
-            self.dict.display()
+            self.dict.display(),
+            runtime_cache_key(&self.runtime_config),
         );
 
         let mut guard = engine_cache()
@@ -206,6 +207,17 @@ struct CachedOcr {
 fn engine_cache() -> &'static Mutex<Option<CachedOcr>> {
     static ENGINE: OnceLock<Mutex<Option<CachedOcr>>> = OnceLock::new();
     ENGINE.get_or_init(|| Mutex::new(None))
+}
+
+fn runtime_cache_key(config: &RuntimeConfig) -> String {
+    serde_json::to_string(config).unwrap_or_default()
+}
+
+/// Drop cached MNN OCR sessions (e.g. before switching inference backend).
+pub fn clear_engine_cache() {
+    if let Ok(mut guard) = engine_cache().lock() {
+        *guard = None;
+    }
 }
 
 fn load_dict(path: &Path) -> Result<Vec<String>> {

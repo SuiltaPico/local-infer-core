@@ -1,3 +1,4 @@
+use std::mem::ManuallyDrop;
 use std::path::Path;
 
 use mnn::{Interpreter, Session};
@@ -32,15 +33,29 @@ pub fn first_io_name(
     Ok(info.name().to_string())
 }
 
+/// Loaded MNN model + session.
+///
+/// Session must be released before the interpreter is destroyed (`releaseSession` then
+/// `Interpreter_destroy`). Rust drops struct fields in declaration order, so keep
+/// `session` before `interpreter` and enforce teardown in [`Drop`].
 pub struct MnnModel {
-    pub interpreter: Interpreter,
-    pub session: Session,
+    pub session: ManuallyDrop<Session>,
+    pub interpreter: ManuallyDrop<Interpreter>,
     pub input_name: String,
     pub output_name: String,
 }
 
 unsafe impl Send for MnnModel {}
 unsafe impl Sync for MnnModel {}
+
+impl Drop for MnnModel {
+    fn drop(&mut self) {
+        unsafe {
+            ManuallyDrop::drop(&mut self.session);
+            ManuallyDrop::drop(&mut self.interpreter);
+        }
+    }
+}
 
 impl MnnModel {
     pub fn load(path: &Path, runtime_config: &RuntimeConfig, component: &str) -> Result<Self> {
@@ -52,8 +67,8 @@ impl MnnModel {
         let input_name = first_io_name(&interpreter, &session, true)?;
         let output_name = first_io_name(&interpreter, &session, false)?;
         Ok(Self {
-            interpreter,
-            session,
+            session: ManuallyDrop::new(session),
+            interpreter: ManuallyDrop::new(interpreter),
             input_name,
             output_name,
         })

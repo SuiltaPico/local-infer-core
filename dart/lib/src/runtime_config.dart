@@ -1,3 +1,5 @@
+import 'dart:io';
+
 class OnnxConfig {
   const OnnxConfig({
     this.executionProviders = const ['auto'],
@@ -67,9 +69,16 @@ class RuntimeConfig {
   final OnnxConfig? onnx;
   final MnnConfig? mnn;
 
-  factory RuntimeConfig.auto() => const RuntimeConfig(
-        onnx: OnnxConfig(executionProviders: ['auto']),
+  factory RuntimeConfig.auto() {
+    if (Platform.isAndroid) {
+      return const RuntimeConfig(
+        mnn: MnnConfig(backend: 'vulkan'),
       );
+    }
+    return const RuntimeConfig(
+      onnx: OnnxConfig(executionProviders: ['auto']),
+    );
+  }
 
   factory RuntimeConfig.cpu() => const RuntimeConfig(
         onnx: OnnxConfig(executionProviders: ['cpu']),
