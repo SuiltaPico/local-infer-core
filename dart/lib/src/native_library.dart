@@ -42,6 +42,9 @@ void initLocalInferCoreLibrary(String libraryPath) {
       'native library not found: $libraryPath',
     );
   }
+  if (Platform.isAndroid) {
+    _preloadAndroidMnnRuntimePlugins();
+  }
   _library = DynamicLibrary.open(libraryPath);
   _kind = _NativeLibraryKind.explicitPath;
 }
@@ -62,6 +65,24 @@ DynamicLibrary get localInferCoreLibrary {
   return _library!;
 }
 
+/// MNN OpenCL/Vulkan backends ship as separate `.so` plugins. They register
+/// runtime creators only after `dlopen`; without preload,
+/// [RuntimeCapabilities.tryLoad] reports CPU-only even when the APK contains
+/// `libMNN_Vulkan.so` / `libMNN_CL.so`.
+void _preloadAndroidMnnRuntimePlugins() {
+  for (final name in [
+    'libMNN.so',
+    'libMNN_Vulkan.so',
+    'libMNN_CL.so',
+  ]) {
+    try {
+      DynamicLibrary.open(name);
+    } on Object {
+      // Optional plugin; CPU-only installs omit GPU libs.
+    }
+  }
+}
+
 void _ensureResolved() {
   if (_kind != _NativeLibraryKind.uninitialized) {
     return;
@@ -73,6 +94,7 @@ void _ensureResolved() {
   }
 
   if (Platform.isAndroid) {
+    _preloadAndroidMnnRuntimePlugins();
     _library = DynamicLibrary.open('libinfer_core.so');
     _kind = _NativeLibraryKind.androidPlugin;
     return;
