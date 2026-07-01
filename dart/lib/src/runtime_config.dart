@@ -68,11 +68,12 @@ class BatchConfig {
   const BatchConfig({
     this.ocrRec = defaultOcrRecBatch,
     this.embed = defaultEmbedBatch,
-    this.ocrRecStrategy = OcrRecStrategy.none,
+    this.ocrRecStrategy = defaultOcrRecStrategy,
   });
 
   static const defaultOcrRecBatch = 8;
   static const defaultEmbedBatch = 8;
+  static const defaultOcrRecStrategy = OcrRecStrategy.bucketing;
   static const minBatch = 1;
   static const maxBatch = 32;
 
@@ -123,8 +124,9 @@ enum OcrRecStrategy {
       case 'unified':
         return OcrRecStrategy.unified;
       case 'none':
-      default:
         return OcrRecStrategy.none;
+      default:
+        return OcrRecStrategy.bucketing;
     }
   }
 }

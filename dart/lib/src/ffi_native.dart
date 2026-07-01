@@ -117,6 +117,20 @@ external int nativeInferOcrRecognizeTimed(
   Pointer<Pointer<Utf8>> errorOut,
 );
 
+@Native<InferOcrRecognizeRgbTimedNative>(
+  assetId: nativeAssetId,
+  symbol: 'infer_ocr_recognize_rgb_timed',
+)
+external int nativeInferOcrRecognizeRgbTimed(
+  Pointer<Void> engine,
+  Pointer<Uint8> rgbBytes,
+  int rgbLength,
+  int width,
+  int height,
+  Pointer<Pointer<Utf8>> jsonOut,
+  Pointer<Pointer<Utf8>> errorOut,
+);
+
 @Native<InferEmbedEngineLoadFn>(
   assetId: nativeAssetId,
   symbol: 'infer_embed_engine_load',

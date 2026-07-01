@@ -115,6 +115,25 @@ typedef InferOcrRecognizeTimedFn = int Function(
   Pointer<Pointer<Utf8>>,
 );
 
+typedef InferOcrRecognizeRgbTimedNative = Int32 Function(
+  Pointer<Void>,
+  Pointer<Uint8>,
+  IntPtr,
+  Uint32,
+  Uint32,
+  Pointer<Pointer<Utf8>>,
+  Pointer<Pointer<Utf8>>,
+);
+typedef InferOcrRecognizeRgbTimedFn = int Function(
+  Pointer<Void>,
+  Pointer<Uint8>,
+  int,
+  int,
+  int,
+  Pointer<Pointer<Utf8>>,
+  Pointer<Pointer<Utf8>>,
+);
+
 typedef InferEmbedRgb256Native = Pointer<Float> Function(
   Pointer<Void>,
   Pointer<Uint8>,

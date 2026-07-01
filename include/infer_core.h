@@ -78,6 +78,19 @@ INFER_CORE_API int32_t infer_ocr_recognize_timed(
     char **out_json,
     char **out_error);
 
+/*
+ * Recognize text from a width×height RGB888 buffer (3 bytes per pixel).
+ * On success writes JSON to *out_json and returns 0.
+ */
+INFER_CORE_API int32_t infer_ocr_recognize_rgb_timed(
+    InferOcrEngine *engine,
+    const uint8_t *rgb,
+    size_t len,
+    uint32_t width,
+    uint32_t height,
+    char **out_json,
+    char **out_error);
+
 INFER_CORE_API InferEmbedEngine *infer_embed_engine_load(
     InferRegistry *registry,
     const char *pack_id,

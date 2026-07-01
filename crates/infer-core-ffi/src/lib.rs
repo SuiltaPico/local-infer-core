@@ -5,8 +5,9 @@ use std::os::raw::{c_char, c_int, c_void};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::Path;
 use std::ptr;
+use std::time::Instant;
 
-use image::DynamicImage;
+use image::{DynamicImage, RgbImage};
 use infer_core_lib::{EmbedEngine, IconIndex, OcrEngine, OcrTimings, OcrWord, Registry, RuntimeConfig};
 
 const OK: c_int = 0;
@@ -109,6 +110,25 @@ fn load_image_bytes(bytes: &[u8]) -> Result<DynamicImage, String> {
     image::load_from_memory(bytes).map_err(|e| e.to_string())
 }
 
+fn load_rgb_bytes(bytes: &[u8], width: u32, height: u32) -> Result<RgbImage, String> {
+    let expected = (width as usize)
+        .checked_mul(height as usize)
+        .and_then(|pixels| pixels.checked_mul(3))
+        .ok_or_else(|| "invalid rgb dimensions".to_string())?;
+    if bytes.len() != expected {
+        return Err(format!(
+            "rgb buffer length mismatch: got {}, expected {expected}",
+            bytes.len()
+        ));
+    }
+    RgbImage::from_raw(width, height, bytes.to_vec())
+        .ok_or_else(|| "failed to build RgbImage".to_string())
+}
+
+fn instant_ms(start: Instant) -> f64 {
+    start.elapsed().as_secs_f64() * 1000.0
+}
+
 fn runtime_config_from_json_ptr(json: *const c_char) -> Result<RuntimeConfig, String> {
     if json.is_null() {
         return Ok(RuntimeConfig::default());
@@ -168,6 +188,8 @@ fn ocr_words_to_json(words: &[OcrWord], timings: &OcrTimings) -> Result<String, 
         "timings": {
             "init_ms": timings.init_ms,
             "predict_ms": timings.predict_ms,
+            "decode_ms": timings.decode_ms,
+            "resize_ms": timings.resize_ms,
             "det_ms": timings.det_ms,
             "rec_ms": timings.rec_ms,
             "post_ms": timings.post_ms,
@@ -394,10 +416,37 @@ pub extern "C" fn infer_ocr_recognize_timed(
     run(out_error, || {
         let engine = ocr_engine_handle(handle)?;
         let bytes = read_bytes(data, len)?;
+        let decode_start = Instant::now();
         let img = load_image_bytes(bytes)?;
-        let (words, timings) = engine
+        let decode_ms = instant_ms(decode_start);
+        let (words, mut timings) = engine
             .engine
             .recognize_timed(&img)
+            .map_err(map_infer_error)?;
+        timings.decode_ms = decode_ms;
+        let json = ocr_words_to_json(&words, &timings)?;
+        unsafe { write_out_json(out_json, &json)? };
+        Ok(())
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn infer_ocr_recognize_rgb_timed(
+    handle: *mut c_void,
+    rgb: *const u8,
+    len: usize,
+    width: u32,
+    height: u32,
+    out_json: *mut *mut c_char,
+    out_error: *mut *mut c_char,
+) -> c_int {
+    run(out_error, || {
+        let engine = ocr_engine_handle(handle)?;
+        let bytes = read_bytes(rgb, len)?;
+        let rgb = load_rgb_bytes(bytes, width, height)?;
+        let (words, timings) = engine
+            .engine
+            .recognize_rgb_timed(rgb)
             .map_err(map_infer_error)?;
         let json = ocr_words_to_json(&words, &timings)?;
         unsafe { write_out_json(out_json, &json)? };

@@ -116,7 +116,9 @@ impl OcrEngine {
         use super::resize::resize_rgb_for_ocr;
 
         let mut timings = OcrTimings::default();
+        let resize_start = Instant::now();
         let (rgb, coord_scale) = resize_rgb_for_ocr(rgb, self.config.max_side);
+        timings.resize_ms = ms_since(resize_start);
 
         let det_cfg = self.config.detection.to_oar_config(self.config.max_side);
         let key = format!(

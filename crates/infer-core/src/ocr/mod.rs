@@ -67,6 +67,10 @@ pub struct OcrWord {
 pub struct OcrTimings {
     pub init_ms: f64,
     pub predict_ms: f64,
+    /// PNG/JPEG/WebP decode in FFI (`recognize_timed` only).
+    pub decode_ms: f64,
+    /// Resize to `max_side` before det/rec.
+    pub resize_ms: f64,
     /// Text detection (det model + contour post-process).
     pub det_ms: f64,
     /// Text recognition (rec model, batched crops).

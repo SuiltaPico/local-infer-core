@@ -125,7 +125,9 @@ impl OcrEngine {
             mnn_configured_backend: Some(self.runtime_config.resolved_mnn_backend()),
             ..OcrTimings::default()
         };
+        let resize_start = Instant::now();
         let (rgb, coord_scale) = resize_rgb_for_ocr(rgb, self.config.max_side);
+        timings.resize_ms = ms_since(resize_start);
 
         let key = format!(
             "{}|{}|{}|{}",

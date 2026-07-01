@@ -37,7 +37,7 @@ pub enum OcrRecStrategy {
 
 impl Default for OcrRecStrategy {
     fn default() -> Self {
-        Self::None
+        Self::Bucketing
     }
 }
 

@@ -32,6 +32,7 @@ final class _Bindings {
   late final InferOcrEngineDestroyFn _ocrEngineDestroy;
   late final InferOcrEngineApplyConfigFn _ocrEngineApplyConfig;
   late final InferOcrRecognizeTimedFn _ocrRecognizeTimed;
+  late final InferOcrRecognizeRgbTimedFn _ocrRecognizeRgbTimed;
   late final InferEmbedEngineLoadFn _embedEngineLoad;
   late final InferEmbedEngineLoadPathFn _embedEngineLoadPath;
   late final InferEmbedEngineDestroyFn _embedEngineDestroy;
@@ -55,6 +56,7 @@ final class _Bindings {
     _ocrEngineDestroy = nativeInferOcrEngineDestroy;
     _ocrEngineApplyConfig = nativeInferOcrEngineApplyConfig;
     _ocrRecognizeTimed = nativeInferOcrRecognizeTimed;
+    _ocrRecognizeRgbTimed = nativeInferOcrRecognizeRgbTimed;
     _embedEngineLoad = nativeInferEmbedEngineLoad;
     _embedEngineLoadPath = nativeInferEmbedEngineLoadPath;
     _embedEngineDestroy = nativeInferEmbedEngineDestroy;
@@ -126,6 +128,10 @@ final class _Bindings {
     _ocrRecognizeTimed = lib.lookupFunction<
         InferOcrRecognizeTimedNative, InferOcrRecognizeTimedFn>(
       'infer_ocr_recognize_timed',
+    );
+    _ocrRecognizeRgbTimed = lib.lookupFunction<
+        InferOcrRecognizeRgbTimedNative, InferOcrRecognizeRgbTimedFn>(
+      'infer_ocr_recognize_rgb_timed',
     );
     _embedEngineLoad =
         lib.lookupFunction<InferEmbedEngineLoadFn, InferEmbedEngineLoadFn>(
@@ -322,6 +328,37 @@ final class _Bindings {
         throw LocalInferException(_takeOwnedString(errorPtr.value));
       }
       return _requireOwnedString(jsonPtr.value, 'ocrRecognizeTimed');
+    } finally {
+      calloc.free(dataPtr);
+      calloc.free(jsonPtr);
+      calloc.free(errorPtr);
+    }
+  }
+
+  String ocrRecognizeRgbTimed({
+    required Pointer<Void> engine,
+    required Uint8List rgbBytes,
+    required int width,
+    required int height,
+  }) {
+    final dataPtr = calloc<Uint8>(rgbBytes.length);
+    final jsonPtr = calloc<Pointer<Utf8>>();
+    final errorPtr = calloc<Pointer<Utf8>>();
+    try {
+      dataPtr.asTypedList(rgbBytes.length).setAll(0, rgbBytes);
+      final rc = _ocrRecognizeRgbTimed(
+        engine,
+        dataPtr,
+        rgbBytes.length,
+        width,
+        height,
+        jsonPtr,
+        errorPtr,
+      );
+      if (rc != 0) {
+        throw LocalInferException(_takeOwnedString(errorPtr.value));
+      }
+      return _requireOwnedString(jsonPtr.value, 'ocrRecognizeRgbTimed');
     } finally {
       calloc.free(dataPtr);
       calloc.free(jsonPtr);

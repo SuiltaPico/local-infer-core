@@ -53,6 +53,8 @@ class OcrTimings {
   const OcrTimings({
     required this.initMs,
     required this.predictMs,
+    this.decodeMs = 0,
+    this.resizeMs = 0,
     this.detMs = 0,
     this.recMs = 0,
     this.postMs = 0,
@@ -62,6 +64,8 @@ class OcrTimings {
 
   final double initMs;
   final double predictMs;
+  final double decodeMs;
+  final double resizeMs;
   final double detMs;
   final double recMs;
   final double postMs;
@@ -76,6 +80,8 @@ class OcrTimings {
     return OcrTimings(
       initMs: (json['init_ms'] as num?)?.toDouble() ?? 0,
       predictMs: (json['predict_ms'] as num?)?.toDouble() ?? 0,
+      decodeMs: (json['decode_ms'] as num?)?.toDouble() ?? 0,
+      resizeMs: (json['resize_ms'] as num?)?.toDouble() ?? 0,
       detMs: (json['det_ms'] as num?)?.toDouble() ?? 0,
       recMs: (json['rec_ms'] as num?)?.toDouble() ?? 0,
       postMs: (json['post_ms'] as num?)?.toDouble() ?? 0,
@@ -109,6 +115,18 @@ class OcrRecognizeResult {
   }
 }
 
+class OcrRecognizePhasedResult {
+  const OcrRecognizePhasedResult({
+    required this.result,
+    required this.ffiMs,
+    required this.parseMs,
+  });
+
+  final OcrRecognizeResult result;
+  final int ffiMs;
+  final int parseMs;
+}
+
 class LocalOcrSession {
   LocalOcrSession._(this._handle);
 
@@ -128,11 +146,64 @@ class LocalOcrSession {
   }
 
   Future<OcrRecognizeResult> recognizeTimed(Uint8List imageBytes) async {
+    return recognizePhased(imageBytes).result;
+  }
+
+  OcrRecognizePhasedResult recognizePhased(Uint8List imageBytes) {
     _assertNotDisposed();
+    final ffiStopwatch = Stopwatch()..start();
     final jsonText = nativeBindings.ocrRecognizeTimed(
-        engine: _handle, imageBytes: imageBytes);
-    return OcrRecognizeResult.fromJson(
+      engine: _handle,
+      imageBytes: imageBytes,
+    );
+    final ffiMs = ffiStopwatch.elapsedMilliseconds;
+    final parseStopwatch = Stopwatch()..start();
+    final result = OcrRecognizeResult.fromJson(
       (jsonDecode(jsonText) as Map).cast<String, dynamic>(),
+    );
+    final parseMs = parseStopwatch.elapsedMilliseconds;
+    return OcrRecognizePhasedResult(
+      result: result,
+      ffiMs: ffiMs,
+      parseMs: parseMs,
+    );
+  }
+
+  Future<OcrRecognizeResult> recognizeRgbTimed({
+    required Uint8List rgbBytes,
+    required int width,
+    required int height,
+  }) async {
+    return recognizeRgbPhased(
+      rgbBytes: rgbBytes,
+      width: width,
+      height: height,
+    ).result;
+  }
+
+  OcrRecognizePhasedResult recognizeRgbPhased({
+    required Uint8List rgbBytes,
+    required int width,
+    required int height,
+  }) {
+    _assertNotDisposed();
+    final ffiStopwatch = Stopwatch()..start();
+    final jsonText = nativeBindings.ocrRecognizeRgbTimed(
+      engine: _handle,
+      rgbBytes: rgbBytes,
+      width: width,
+      height: height,
+    );
+    final ffiMs = ffiStopwatch.elapsedMilliseconds;
+    final parseStopwatch = Stopwatch()..start();
+    final result = OcrRecognizeResult.fromJson(
+      (jsonDecode(jsonText) as Map).cast<String, dynamic>(),
+    );
+    final parseMs = parseStopwatch.elapsedMilliseconds;
+    return OcrRecognizePhasedResult(
+      result: result,
+      ffiMs: ffiMs,
+      parseMs: parseMs,
     );
   }
 
