@@ -12,6 +12,51 @@ pub struct RuntimeConfig {
     pub onnx: Option<OnnxConfig>,
     #[serde(default)]
     pub mnn: Option<MnnConfig>,
+    #[serde(default)]
+    pub batch: BatchConfig,
+}
+
+/// Batch sizes for OCR rec and icon/embed inference (clamped to 1–32 at use site).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct BatchConfig {
+    #[serde(default = "default_ocr_rec_batch")]
+    pub ocr_rec: u32,
+    #[serde(default = "default_embed_batch")]
+    pub embed: u32,
+}
+
+impl Default for BatchConfig {
+    fn default() -> Self {
+        Self {
+            ocr_rec: default_ocr_rec_batch(),
+            embed: default_embed_batch(),
+        }
+    }
+}
+
+const BATCH_MIN: u32 = 1;
+const BATCH_MAX: u32 = 32;
+
+fn default_ocr_rec_batch() -> u32 {
+    8
+}
+
+fn default_embed_batch() -> u32 {
+    8
+}
+
+fn clamp_batch_size(v: u32) -> usize {
+    v.clamp(BATCH_MIN, BATCH_MAX) as usize
+}
+
+impl BatchConfig {
+    pub fn ocr_rec_batch(&self) -> usize {
+        clamp_batch_size(self.ocr_rec)
+    }
+
+    pub fn embed_batch(&self) -> usize {
+        clamp_batch_size(self.embed)
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -83,6 +128,18 @@ impl RuntimeConfig {
 
     pub fn mnn_config(&self) -> MnnConfig {
         self.mnn.clone().unwrap_or_default()
+    }
+
+    pub fn batch_config(&self) -> BatchConfig {
+        self.batch.clone()
+    }
+
+    pub fn ocr_rec_batch(&self) -> usize {
+        self.batch_config().ocr_rec_batch()
+    }
+
+    pub fn embed_batch(&self) -> usize {
+        self.batch_config().embed_batch()
     }
 
     /// Configured MNN backend after resolving `"auto"` to a concrete preference.
@@ -191,6 +248,19 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(cfg.resolved_eps(), vec!["cpu"]);
+    }
+
+    #[test]
+    fn batch_sizes_clamp_to_valid_range() {
+        let cfg = RuntimeConfig {
+            batch: BatchConfig {
+                ocr_rec: 0,
+                embed: 64,
+            },
+            ..Default::default()
+        };
+        assert_eq!(cfg.ocr_rec_batch(), 1);
+        assert_eq!(cfg.embed_batch(), 32);
     }
 
     #[test]

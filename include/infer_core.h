@@ -101,6 +101,21 @@ INFER_CORE_API float *infer_embed_rgb256(
     size_t *out_dim,
     char **out_error);
 
+/*
+ * Embed multiple 256×256 RGB888 images in one batch.
+ * rgb_batch: count × 768 KiB concatenated.
+ * On success writes *out_count, *out_dim (per vector) and returns count×dim floats
+ * (free with infer_floats_free).
+ */
+INFER_CORE_API float *infer_embed_rgb256_batch(
+    InferEmbedEngine *engine,
+    const uint8_t *rgb_batch,
+    size_t rgb_len,
+    size_t count,
+    size_t *out_count,
+    size_t *out_dim,
+    char **out_error);
+
 INFER_CORE_API InferIconIndex *infer_icon_index_load(
     InferRegistry *registry,
     const char *pack_id,

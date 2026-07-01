@@ -169,14 +169,15 @@ impl OcrEngine {
         )?;
 
         let mut words = Vec::new();
-        for bbox in boxes {
-            let text = recognize_crop(
-                &mut engine.rec,
-                &engine.dict,
-                &rgb,
-                &bbox,
-                self.rec_height,
-            )?;
+        let texts = recognize_crops_batch(
+            &mut engine.rec,
+            &engine.dict,
+            &rgb,
+            &boxes,
+            self.rec_height,
+            self.runtime_config.ocr_rec_batch(),
+        )?;
+        for (bbox, text) in boxes.into_iter().zip(texts) {
             if text.is_empty() {
                 continue;
             }
@@ -499,16 +500,107 @@ fn contour_aabb(points: &[imageproc::point::Point<u32>]) -> (u32, u32, u32, u32)
     (x0, y0, x1, y1)
 }
 
-fn recognize_crop(
+fn recognize_crops_batch(
     model: &mut MnnModel,
     dict: &[String],
     rgb: &RgbImage,
-    bounds: &OcrBounds,
+    boxes: &[OcrBounds],
     rec_height: u32,
-) -> Result<String> {
+    batch_size: usize,
+) -> Result<Vec<String>> {
+    let batch_size = batch_size.max(1);
+    if boxes.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut crops = Vec::with_capacity(boxes.len());
+    for bbox in boxes {
+        crops.push(prepare_rec_crop(rgb, bbox, rec_height));
+    }
+
+    let mut texts = vec![String::new(); boxes.len()];
+    for chunk_start in (0..crops.len()).step_by(batch_size) {
+        let chunk_end = (chunk_start + batch_size).min(crops.len());
+        let chunk = &crops[chunk_start..chunk_end];
+        let valid: Vec<(usize, &RgbImage)> = chunk
+            .iter()
+            .enumerate()
+            .filter_map(|(i, crop)| crop.as_ref().map(|img| (i, img)))
+            .collect();
+        if valid.is_empty() {
+            continue;
+        }
+
+        let pad_w = valid
+            .iter()
+            .map(|(_, img)| img.width())
+            .max()
+            .unwrap_or(1);
+        let batch_images: Vec<RgbImage> = valid.iter().map(|(_, img)| (*img).clone()).collect();
+        let batch_size = batch_images.len() as u16;
+
+        let input_name = model.input_name.clone();
+        let output_name = model.output_name.clone();
+
+        let mut input =
+            unsafe { model.interpreter.input_unresized::<f32>(&model.session, &input_name) }
+                .map_err(|e| mnn_util::map_err("ocr-rec", e))?;
+        model.interpreter.resize_tensor_by_nchw(
+            &mut input,
+            batch_size,
+            3,
+            rec_height as u16,
+            pad_w as u16,
+        );
+        drop(input);
+        model.interpreter.resize_session(&mut model.session);
+
+        let nchw = mnn_util::batch_rgb_to_nchw_rec(&batch_images, rec_height, pad_w);
+        let mut input = model
+            .interpreter
+            .input(&model.session, &input_name)
+            .map_err(|e| mnn_util::map_err("ocr-rec", e))?;
+        let mut host = input.create_host_tensor_from_device(false);
+        host.host_mut().copy_from_slice(&nchw);
+        input
+            .copy_from_host_tensor(&host)
+            .map_err(|e| mnn_util::map_err("ocr-rec", e))?;
+        drop(input);
+
+        model
+            .interpreter
+            .run_session(&model.session)
+            .map_err(|e| mnn_util::map_err("ocr-rec", e))?;
+
+        let logits = mnn_util::read_output_f32(
+            &model.interpreter,
+            &model.session,
+            &output_name,
+            "ocr-rec",
+        )?;
+        let output = model
+            .interpreter
+            .output(&model.session, &output_name)
+            .map_err(|e| mnn_util::map_err("ocr-rec", e))?;
+        let (batch, time_steps, num_classes) = ctc_dims_batch(&output);
+
+        for (j, (local_i, _)) in valid.iter().enumerate() {
+            let global_i = chunk_start + local_i;
+            if j >= batch {
+                continue;
+            }
+            let row = &logits[j * time_steps * num_classes..(j + 1) * time_steps * num_classes];
+            texts[global_i] = decode_ctc(row, time_steps, num_classes, dict);
+        }
+    }
+
+    Ok(texts)
+}
+
+fn prepare_rec_crop(rgb: &RgbImage, bounds: &OcrBounds, rec_height: u32) -> Option<RgbImage> {
     let crop = crop_rgb(rgb, bounds);
     if crop.width() == 0 || crop.height() == 0 {
-        return Ok(String::new());
+        return None;
     }
 
     let (cw, ch) = crop.dimensions();
@@ -523,48 +615,22 @@ fn recognize_crop(
             image::imageops::FilterType::Triangle,
         )
     };
+    Some(resized)
+}
 
-    let nchw = mnn_util::rgb_to_nchw_rec(&resized);
-    let input_name = model.input_name.clone();
-    let output_name = model.output_name.clone();
-
-    let mut input = unsafe { model.interpreter.input_unresized::<f32>(&model.session, &input_name) }
-        .map_err(|e| mnn_util::map_err("ocr-rec", e))?;
-    model
-        .interpreter
-        .resize_tensor_by_nchw(&mut input, 1, 3, rec_height as u16, target_w as u16);
-    drop(input);
-    model.interpreter.resize_session(&mut model.session);
-
-    let mut input = model
-        .interpreter
-        .input(&model.session, &input_name)
-        .map_err(|e| mnn_util::map_err("ocr-rec", e))?;
-    let mut host = input.create_host_tensor_from_device(false);
-    host.host_mut().copy_from_slice(&nchw);
-    input
-        .copy_from_host_tensor(&host)
-        .map_err(|e| mnn_util::map_err("ocr-rec", e))?;
-    drop(input);
-
-    model
-        .interpreter
-        .run_session(&model.session)
-        .map_err(|e| mnn_util::map_err("ocr-rec", e))?;
-
-    let logits = mnn_util::read_output_f32(
-        &model.interpreter,
-        &model.session,
-        &output_name,
-        "ocr-rec",
-    )?;
-    let output = model
-        .interpreter
-        .output(&model.session, &output_name)
-        .map_err(|e| mnn_util::map_err("ocr-rec", e))?;
-    let (time_steps, num_classes) = ctc_dims(&output);
-
-    Ok(decode_ctc(&logits, time_steps, num_classes, dict))
+fn ctc_dims_batch(output: &mnn::Tensor<mnn::Ref<'_, mnn::Device<f32>>>) -> (usize, usize, usize) {
+    let shape = output.shape();
+    let dims: Vec<i32> = shape.as_ref().to_vec();
+    match dims.as_slice() {
+        [n, t, c] => (*n as usize, *t as usize, *c as usize),
+        [t, c] => (1, *t as usize, *c as usize),
+        [_, _, t, c] => (output.batch() as usize, *t as usize, *c as usize),
+        _ => {
+            let batch = output.batch().max(1) as usize;
+            let (time_steps, num_classes) = ctc_dims(output);
+            (batch, time_steps, num_classes)
+        }
+    }
 }
 
 fn ctc_dims(output: &mnn::Tensor<mnn::Ref<'_, mnn::Device<f32>>>) -> (usize, usize) {

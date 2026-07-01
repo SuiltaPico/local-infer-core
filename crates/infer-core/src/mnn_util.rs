@@ -1,7 +1,7 @@
 use std::mem::ManuallyDrop;
 use std::path::Path;
 
-use mnn::{Interpreter, Session};
+use mnn::{Interpreter, Session, SessionMode};
 
 use crate::error::{InferError, Result};
 use crate::runtime::{self, RuntimeConfig};
@@ -71,9 +71,13 @@ impl MnnModel {
     pub fn load(path: &Path, runtime_config: &RuntimeConfig, component: &str) -> Result<Self> {
         let mut interpreter =
             Interpreter::from_file(path).map_err(|e| map_err(component, e))?;
-        let session = interpreter
+        interpreter.set_session_mode(SessionMode::MemoryCache);
+        let cache_path = mnn_cache_path(path);
+        let _ = interpreter.set_cache_file(&cache_path, 128);
+        let mut session = interpreter
             .create_session(runtime::mnn::schedule_config(runtime_config))
             .map_err(|e| map_err(component, e))?;
+        let _ = interpreter.update_cache_file(&mut session);
         let input_name = first_io_name(&interpreter, &session, true)?;
         let output_name = first_io_name(&interpreter, &session, false)?;
         Ok(Self {
@@ -83,6 +87,11 @@ impl MnnModel {
             output_name,
         })
     }
+}
+
+/// Backend kernel cache path for an MNN model (`.mnn` → `.cache` beside the model).
+fn mnn_cache_path(model_path: &Path) -> std::path::PathBuf {
+    model_path.with_extension("cache")
 }
 
 /// RGB HWC → NCHW with ImageNet normalization (Paddle det).
@@ -105,17 +114,47 @@ pub fn rgb_to_nchw_imagenet(rgb: &image::RgbImage) -> Vec<f32> {
     out
 }
 
-/// RGB HWC → NCHW with `x = pixel/127.5 - 1` (Paddle rec).
-pub fn rgb_to_nchw_rec(rgb: &image::RgbImage) -> Vec<f32> {
-    let (w, h) = rgb.dimensions();
-    let plane = (w * h) as usize;
-    let mut out = vec![0.0f32; 3 * plane];
-    for y in 0..h {
-        for x in 0..w {
-            let idx = (y * w + x) as usize;
-            let p = rgb.get_pixel(x, y);
-            for c in 0..3 {
-                out[c * plane + idx] = p[c] as f32 / 127.5 - 1.0;
+/// Stack N rec crops (same H, padded to `pad_w`) into `[N, 3, H, W]` NCHW.
+pub fn batch_rgb_to_nchw_rec(
+    crops: &[image::RgbImage],
+    rec_height: u32,
+    pad_w: u32,
+) -> Vec<f32> {
+    let batch = crops.len();
+    let plane = (rec_height * pad_w) as usize;
+    let mut out = vec![0.0f32; batch * 3 * plane];
+    for (b, crop) in crops.iter().enumerate() {
+        let (w, h) = crop.dimensions();
+        debug_assert!(h == rec_height && w <= pad_w);
+        let base = b * 3 * plane;
+        for y in 0..h {
+            for x in 0..w {
+                let idx = (y * pad_w + x) as usize;
+                let p = crop.get_pixel(x, y);
+                for c in 0..3 {
+                    out[base + c * plane + idx] = p[c] as f32 / 127.5 - 1.0;
+                }
+            }
+        }
+    }
+    out
+}
+
+/// Stack N fixed-size RGB images into `[N, 3, H, W]` NCHW in [0, 1].
+pub fn batch_rgb256_to_nchw(images: &[image::RgbImage], size: u32) -> Vec<f32> {
+    let batch = images.len();
+    let plane = (size * size) as usize;
+    let mut out = vec![0.0f32; batch * 3 * plane];
+    for (b, rgb) in images.iter().enumerate() {
+        debug_assert_eq!(rgb.dimensions(), (size, size));
+        let base = b * 3 * plane;
+        for y in 0..size {
+            for x in 0..size {
+                let idx = (y * size + x) as usize;
+                let p = rgb.get_pixel(x, y);
+                out[base + idx] = p[0] as f32 / 255.0;
+                out[base + plane + idx] = p[1] as f32 / 255.0;
+                out[base + 2 * plane + idx] = p[2] as f32 / 255.0;
             }
         }
     }

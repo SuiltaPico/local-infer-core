@@ -14,6 +14,7 @@ pub struct EmbedEngine {
     session: Session,
     input_name: String,
     output_name: String,
+    runtime_config: RuntimeConfig,
 }
 
 impl EmbedEngine {
@@ -57,12 +58,24 @@ impl EmbedEngine {
             session,
             input_name,
             output_name,
+            runtime_config: runtime_config.clone(),
         })
     }
 
     pub fn embed_rgb256(&mut self, rgb: &RgbImage) -> Result<Vec<f32>> {
         let tensor = rgb256_to_nchw(rgb);
         self.embed_nchw(&tensor)
+    }
+
+    pub fn embed_rgb256_batch(&mut self, images: &[RgbImage]) -> Result<Vec<Vec<f32>>> {
+        let batch_size = self.runtime_config.embed_batch().max(1);
+        let mut out = Vec::with_capacity(images.len());
+        for chunk in images.chunks(batch_size) {
+            for rgb in chunk {
+                out.push(self.embed_rgb256(rgb)?);
+            }
+        }
+        Ok(out)
     }
 
     pub fn embed_nchw(&mut self, nchw: &[f32]) -> Result<Vec<f32>> {

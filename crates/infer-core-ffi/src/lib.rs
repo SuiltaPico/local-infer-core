@@ -530,6 +530,84 @@ pub extern "C" fn infer_embed_rgb256(
 }
 
 #[no_mangle]
+pub extern "C" fn infer_embed_rgb256_batch(
+    handle: *mut c_void,
+    rgb_batch: *const u8,
+    rgb_len: usize,
+    count: usize,
+    out_count: *mut usize,
+    out_dim: *mut usize,
+    out_error: *mut *mut c_char,
+) -> *mut f32 {
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        let engine = embed_engine_handle(handle)?;
+        if count == 0 {
+            return Ok(Vec::new());
+        }
+        let bytes = read_bytes(rgb_batch, rgb_len)?;
+        let per_image = infer_core_lib::INPUT_SIZE as usize
+            * infer_core_lib::INPUT_SIZE as usize
+            * 3;
+        let expected = per_image * count;
+        if bytes.len() != expected {
+            return Err(format!(
+                "rgb256 batch must be {expected} bytes ({count} images), got {}",
+                bytes.len()
+            ));
+        }
+
+        let mut images = Vec::with_capacity(count);
+        for i in 0..count {
+            let start = i * per_image;
+            let end = start + per_image;
+            let rgb = image::RgbImage::from_raw(
+                infer_core_lib::INPUT_SIZE,
+                infer_core_lib::INPUT_SIZE,
+                bytes[start..end].to_vec(),
+            )
+            .ok_or_else(|| format!("invalid rgb256 buffer at index {i}"))?;
+            images.push(rgb);
+        }
+
+        let embeddings = engine
+            .engine
+            .embed_rgb256_batch(&images)
+            .map_err(map_infer_error)?;
+        Ok(embeddings)
+    }));
+
+    match result {
+        Ok(Ok(embeddings)) => {
+            clear_error(out_error);
+            let dim = embeddings.first().map(|e| e.len()).unwrap_or(0);
+            if !out_count.is_null() {
+                unsafe {
+                    *out_count = embeddings.len();
+                }
+            }
+            if !out_dim.is_null() {
+                unsafe {
+                    *out_dim = dim;
+                }
+            }
+            let flat: Vec<f32> = embeddings.into_iter().flatten().collect();
+            let mut boxed = flat.into_boxed_slice();
+            let ptr = boxed.as_mut_ptr();
+            std::mem::forget(boxed);
+            ptr
+        }
+        Ok(Err(message)) => {
+            set_error(out_error, message);
+            ptr::null_mut()
+        }
+        Err(_) => {
+            set_error(out_error, "internal panic");
+            ptr::null_mut()
+        }
+    }
+}
+
+#[no_mangle]
 pub extern "C" fn infer_icon_index_load(
     handle: *mut c_void,
     pack_id: *const c_char,

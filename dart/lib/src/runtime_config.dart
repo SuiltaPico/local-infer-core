@@ -63,40 +63,106 @@ class MnnConfig {
   }
 }
 
-class RuntimeConfig {
-  const RuntimeConfig({this.onnx, this.mnn});
+/// OCR rec / icon embed batch sizes (native clamps to 1–32).
+class BatchConfig {
+  const BatchConfig({
+    this.ocrRec = defaultOcrRecBatch,
+    this.embed = defaultEmbedBatch,
+  });
 
-  final OnnxConfig? onnx;
-  final MnnConfig? mnn;
+  static const defaultOcrRecBatch = 8;
+  static const defaultEmbedBatch = 8;
+  static const minBatch = 1;
+  static const maxBatch = 32;
 
-  factory RuntimeConfig.auto() {
-    if (Platform.isAndroid) {
-      return const RuntimeConfig(
-        mnn: MnnConfig(backend: 'vulkan'),
-      );
-    }
-    return const RuntimeConfig(
-      onnx: OnnxConfig(executionProviders: ['auto']),
+  final int ocrRec;
+  final int embed;
+
+  int get clampedOcrRec => ocrRec.clamp(minBatch, maxBatch);
+  int get clampedEmbed => embed.clamp(minBatch, maxBatch);
+
+  Map<String, dynamic> toJson() => {
+        'ocr_rec': ocrRec,
+        'embed': embed,
+      };
+
+  factory BatchConfig.fromJson(Map<String, dynamic> json) {
+    return BatchConfig(
+      ocrRec: _readBatch(json['ocr_rec'], defaultOcrRecBatch),
+      embed: _readBatch(json['embed'], defaultEmbedBatch),
     );
   }
 
-  factory RuntimeConfig.cpu() => const RuntimeConfig(
-        onnx: OnnxConfig(executionProviders: ['cpu']),
+  BatchConfig copyWith({int? ocrRec, int? embed}) {
+    return BatchConfig(
+      ocrRec: ocrRec ?? this.ocrRec,
+      embed: embed ?? this.embed,
+    );
+  }
+}
+
+int _readBatch(Object? value, int fallback) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  return fallback;
+}
+
+class RuntimeConfig {
+  const RuntimeConfig({this.onnx, this.mnn, this.batch = const BatchConfig()});
+
+  final OnnxConfig? onnx;
+  final MnnConfig? mnn;
+  final BatchConfig batch;
+
+  factory RuntimeConfig.auto({BatchConfig batch = const BatchConfig()}) {
+    if (Platform.isAndroid) {
+      return RuntimeConfig(
+        mnn: const MnnConfig(backend: 'vulkan'),
+        batch: batch,
+      );
+    }
+    return RuntimeConfig(
+      onnx: const OnnxConfig(executionProviders: ['auto']),
+      batch: batch,
+    );
+  }
+
+  factory RuntimeConfig.cpu({BatchConfig batch = const BatchConfig()}) =>
+      RuntimeConfig(
+        onnx: const OnnxConfig(executionProviders: ['cpu']),
+        batch: batch,
       );
 
   Map<String, dynamic> toJson() => {
         if (onnx != null) 'onnx': onnx!.toJson(),
         if (mnn != null) 'mnn': mnn!.toJson(),
+        'batch': batch.toJson(),
       };
 
   factory RuntimeConfig.fromJson(Map<String, dynamic> json) {
     final onnxJson = json['onnx'];
     final mnnJson = json['mnn'];
+    final batchJson = json['batch'];
     return RuntimeConfig(
       onnx: onnxJson is Map<String, dynamic>
           ? OnnxConfig.fromJson(onnxJson)
           : null,
       mnn: mnnJson is Map<String, dynamic> ? MnnConfig.fromJson(mnnJson) : null,
+      batch: batchJson is Map<String, dynamic>
+          ? BatchConfig.fromJson(batchJson)
+          : const BatchConfig(),
+    );
+  }
+
+  RuntimeConfig copyWith({
+    OnnxConfig? onnx,
+    MnnConfig? mnn,
+    BatchConfig? batch,
+  }) {
+    return RuntimeConfig(
+      onnx: onnx ?? this.onnx,
+      mnn: mnn ?? this.mnn,
+      batch: batch ?? this.batch,
     );
   }
 
