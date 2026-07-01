@@ -51,6 +51,15 @@ typedef InferIconIndexDestroyFn = void Function(Pointer<Void>);
 typedef InferRuntimeBackendsJsonNative = Int32 Function(Pointer<Pointer<Utf8>>);
 typedef InferRuntimeBackendsJsonFn = int Function(Pointer<Pointer<Utf8>>);
 
+typedef InferRuntimeStatusJsonNative = Int32 Function(
+  Pointer<Utf8>,
+  Pointer<Pointer<Utf8>>,
+);
+typedef InferRuntimeStatusJsonFn = int Function(
+  Pointer<Utf8>,
+  Pointer<Pointer<Utf8>>,
+);
+
 typedef InferFloatsFreeNative = Void Function(Pointer<Float>, IntPtr);
 typedef InferFloatsFreeFn = void Function(Pointer<Float>, int);
 

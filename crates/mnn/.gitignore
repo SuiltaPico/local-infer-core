@@ -1,0 +1,11 @@
+.direnv
+target
+.DS_Store
+*.mnn
+*.ppm
+lama
+*.json
+*.cache
+result
+.env
+justfile

@@ -20,6 +20,15 @@ external Pointer<Utf8> nativeInferCoreVersion();
 )
 external int nativeInferRuntimeBackendsJson(Pointer<Pointer<Utf8>> jsonOut);
 
+@Native<InferRuntimeStatusJsonNative>(
+  assetId: nativeAssetId,
+  symbol: 'infer_runtime_status_json',
+)
+external int nativeInferRuntimeStatusJson(
+  Pointer<Utf8> runtimeConfigJson,
+  Pointer<Pointer<Utf8>> jsonOut,
+);
+
 @Native<InferStringFreeNative>(
   assetId: nativeAssetId,
   symbol: 'infer_string_free',

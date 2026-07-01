@@ -85,6 +85,21 @@ impl RuntimeConfig {
         self.mnn.clone().unwrap_or_default()
     }
 
+    /// Configured MNN backend after resolving `"auto"` to a concrete preference.
+    pub fn resolved_mnn_backend(&self) -> String {
+        let mnn = self.mnn_config();
+        let backend = mnn.backend.trim();
+        if !backend.is_empty() && backend != "auto" {
+            return backend.to_string();
+        }
+        for name in ["vulkan", "opencl", "metal", "cuda"] {
+            if available_backends().iter().any(|b| b == name) {
+                return name.to_string();
+            }
+        }
+        "cpu".to_string()
+    }
+
     pub fn resolved_eps(&self) -> Vec<String> {
         let onnx = self.onnx_config();
         if !onnx.execution_providers.is_empty()
@@ -152,7 +167,7 @@ fn ep_available(name: &str) -> bool {
 #[cfg(feature = "backend-ort")]
 pub use ort::{apply_session_builder, oar_session_config};
 
-pub use capabilities::{available_backends, backend_kind};
+pub use capabilities::{available_backends, backend_kind, forward_type_name};
 
 #[cfg(test)]
 mod tests {
@@ -176,5 +191,24 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(cfg.resolved_eps(), vec!["cpu"]);
+    }
+
+    #[test]
+    fn resolved_mnn_backend_prefers_vulkan_when_available() {
+        if !cfg!(feature = "backend-mnn") {
+            return;
+        }
+        let cfg = RuntimeConfig {
+            mnn: Some(MnnConfig {
+                backend: "auto".into(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let resolved = cfg.resolved_mnn_backend();
+        assert!(
+            ["vulkan", "opencl", "cpu"].contains(&resolved.as_str()),
+            "unexpected resolved backend: {resolved}"
+        );
     }
 }

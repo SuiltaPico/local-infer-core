@@ -10,6 +10,10 @@ const VENDOR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/vendor");
 const MANIFEST_DIR: &str = env!("CARGO_MANIFEST_DIR");
 const THIRD_PARTY_MNN_SOURCE: &str =
     concat!(env!("CARGO_MANIFEST_DIR"), "/../../third_party/mnn/source");
+const THIRD_PARTY_MNN_WINDOWS_MD: &str =
+    concat!(env!("CARGO_MANIFEST_DIR"), "/../../third_party/mnn/windows/x64-md");
+const THIRD_PARTY_MNN_ANDROID: &str =
+    concat!(env!("CARGO_MANIFEST_DIR"), "/../../third_party/mnn/android");
 static TARGET_OS: LazyLock<String> =
     LazyLock::new(|| std::env::var("CARGO_CFG_TARGET_OS").expect("CARGO_CFG_TARGET_OS not set"));
 static TARGET_ARCH: LazyLock<String> = LazyLock::new(|| {
@@ -36,11 +40,17 @@ static MNN_COMPILE: LazyLock<bool> = LazyLock::new(|| {
             "0" | "false" | "no" => Some(false),
             _ => None,
         })
-        .unwrap_or(true)
+        .unwrap_or_else(|| resolve_prebuilt_lib_dir().is_none())
 });
 
 static MNN_LINK: LazyLock<String> = LazyLock::new(|| {
-    std::env::var("MNN_LINK").unwrap_or_else(|_| "static".into())
+    std::env::var("MNN_LINK").unwrap_or_else(|_| {
+        if resolve_prebuilt_lib_dir().is_some() {
+            "dylib".into()
+        } else {
+            "static".into()
+        }
+    })
 });
 
 const HALIDE_SEARCH: &str =
@@ -246,15 +256,13 @@ fn ensure_vendor_exists(vendor: impl AsRef<Path>) -> Result<()> {
     let vendor = vendor.as_ref();
     if !vendor.is_dir() {
         anyhow::bail!(
-            "MNN source directory missing: {}. Set MNN_SRC or place source under {} or {}.",
+            "MNN source directory missing: {}. Set MNN_SRC or run scripts/download_mnn_windows.ps1 (Windows) / scripts/download_mnn_android.ps1 (Android).",
             vendor.display(),
-            VENDOR,
-            THIRD_PARTY_MNN_SOURCE
         );
     }
     if vendor.read_dir()?.flatten().next().is_none() {
         anyhow::bail!(
-            "MNN source tree is empty at {}. Run scripts/download_mnn_android.ps1 or set MNN_SRC.",
+            "MNN source tree is empty at {}. Run scripts/download_mnn_windows.ps1 or scripts/download_mnn_android.ps1, or set MNN_SRC.",
             vendor.display()
         )
     }
@@ -280,6 +288,59 @@ fn resolve_mnn_source() -> PathBuf {
         }
     }
     PathBuf::from(VENDOR)
+}
+
+fn android_prebuilt_abi() -> Option<&'static str> {
+    match TARGET_ARCH.as_str() {
+        "aarch64" => Some("arm64-v8a"),
+        "arm" => Some("armeabi-v7a"),
+        "x86_64" => Some("x86_64"),
+        _ => None,
+    }
+}
+
+fn resolve_prebuilt_lib_dir() -> Option<PathBuf> {
+    if let core::result::Result::Ok(lib_dir) = std::env::var("MNN_LIB_DIR") {
+        let dir = PathBuf::from(lib_dir);
+        if dir.join("MNN.lib").is_file() || dir.join("libMNN.so").is_file() {
+            return Some(dir);
+        }
+    }
+    if *TARGET_OS == "windows" && *TARGET_ARCH == "x86_64" {
+        let dir = PathBuf::from(THIRD_PARTY_MNN_WINDOWS_MD);
+        if dir.join("MNN.lib").is_file() {
+            return Some(dir);
+        }
+    }
+    if *TARGET_OS == "android" {
+        if let Some(abi) = android_prebuilt_abi() {
+            let dir = PathBuf::from(THIRD_PARTY_MNN_ANDROID).join(abi);
+            if dir.join("libMNN.so").is_file() {
+                return Some(dir);
+            }
+        }
+    }
+    None
+}
+
+fn copy_windows_runtime_dll(lib_dir: &Path) -> Result<()> {
+    let dll = lib_dir.join("MNN.dll");
+    if !dll.is_file() {
+        return Ok(());
+    }
+    let out_dir = PathBuf::from(std::env::var("OUT_DIR")?);
+    let Some(profile_dir) = out_dir.ancestors().nth(3) else {
+        return Ok(());
+    };
+    let deps_dir = profile_dir.join("deps");
+    for dest_dir in [profile_dir, deps_dir.as_path()] {
+        let dest = dest_dir.join("MNN.dll");
+        if let Some(parent) = dest.parent() {
+            std::fs::create_dir_all(parent).ok();
+        }
+        std::fs::copy(&dll, &dest).with_context(|| format!("Failed to copy {} to {}", dll.display(), dest.display()))?;
+    }
+    Ok(())
 }
 
 fn main() -> Result<()> {
@@ -349,10 +410,17 @@ fn main() -> Result<()> {
             "cargo:rustc-link-search=native={}",
             install_dir.join("lib").display()
         );
-    } else if let core::result::Result::Ok(lib_dir) = std::env::var("MNN_LIB_DIR") {
-        println!("cargo:rustc-link-search=native={}", lib_dir);
     } else {
-        panic!("MNN_LIB_DIR not set while MNN_COMPILE is false");
+        let lib_dir = resolve_prebuilt_lib_dir().with_context(|| {
+            "MNN prebuilt library not found. On Windows x64 run scripts/download_mnn_windows.ps1; \
+             on Android run scripts/download_mnn_android.ps1. Or set MNN_LIB_DIR, or MNN_COMPILE=1 to build from source."
+        })?;
+        println!("cargo:rustc-link-search=native={}", lib_dir.display());
+        println!("cargo:rerun-if-changed={}", lib_dir.join("MNN.lib").display());
+        println!("cargo:rerun-if-changed={}", lib_dir.join("libMNN.so").display());
+        if *TARGET_OS == "windows" && MNN_LINK.as_str() == "dylib" {
+            copy_windows_runtime_dll(&lib_dir)?;
+        }
     }
 
     mnn_c_build(PathBuf::from(MANIFEST_DIR).join("mnn_c"), &vendor)
@@ -398,7 +466,13 @@ fn main() -> Result<()> {
     }
     match MNN_LINK.as_str() {
         "dylib" => println!("cargo:rustc-link-lib=dylib=MNN"),
-        "static" => println!("cargo:rustc-link-lib=static=MNN"),
+        "static" => {
+            println!("cargo:rustc-link-lib=static=MNN");
+            if *TARGET_OS == "windows" && !*MNN_COMPILE {
+                // Official prebuilt Static/MD MNN.lib pulls in MSVC C++ STL objects.
+                println!("cargo:rustc-link-lib=dylib=msvcprt");
+            }
+        }
         other => panic!("Invalid MNN_LINK={other}, expected dylib or static"),
     }
     Ok(())
@@ -438,11 +512,19 @@ pub fn mnn_cpp_bindgen(vendor: impl AsRef<Path>, out: impl AsRef<Path>) -> Resul
 
 pub fn mnn_c_build(path: impl AsRef<Path>, vendor: impl AsRef<Path>) -> Result<()> {
     configure_android_cc()?;
+    let windows_prebuilt_dylib =
+        *TARGET_OS == "windows" && !*MNN_COMPILE && MNN_LINK.as_str() == "dylib";
+    let windows_prebuilt_static =
+        *TARGET_OS == "windows" && !*MNN_COMPILE && MNN_LINK.as_str() == "static";
     let mnn_c = path.as_ref();
     mnn_c.read_dir()?.flatten().for_each(|e| {
         rerun_if_changed(e.path());
     });
     let files = mnn_c.read_dir()?.flatten().map(|e| e.path()).filter(|e| {
+        let name = e.file_name().and_then(|s| s.to_str()).unwrap_or("");
+        if name == "stl_link_shim.cpp" {
+            return windows_prebuilt_static;
+        }
         e.extension() == Some(std::ffi::OsStr::new("cpp"))
             || e.extension() == Some(std::ffi::OsStr::new("c"))
     });
@@ -451,6 +533,9 @@ pub fn mnn_c_build(path: impl AsRef<Path>, vendor: impl AsRef<Path>) -> Result<(
         .include(vendor.join("include"))
         // .includes(vulkan_includes(vendor))
         .pipe(|config| {
+            if windows_prebuilt_dylib {
+                config.define("MNN_SYS_RUNTIME_PROBE_STUB", "1");
+            }
             #[cfg(feature = "vulkan")]
             config.define("MNN_VULKAN", "1");
             #[cfg(feature = "opengl")]
@@ -460,7 +545,7 @@ pub fn mnn_c_build(path: impl AsRef<Path>, vendor: impl AsRef<Path>) -> Result<(
             #[cfg(feature = "coreml")]
             config.define("MNN_COREML", "1");
             #[cfg(feature = "opencl")]
-            config.define("MNN_OPENCL", "ON");
+            config.define("MNN_OPENCL", "1");
             if is_emscripten() {
                 config.compiler("emcc");
                 // We can't compile wasm32-unknown-unknown with emscripten
@@ -502,8 +587,16 @@ pub fn build_cmake(path: impl AsRef<Path>, install: impl AsRef<Path>) -> Result<
         .define("CMAKE_INSTALL_PREFIX", install.as_ref())
         // https://github.com/rust-lang/rust/issues/39016
         // https://github.com/rust-lang/cc-rs/pull/717
-        // .define("CMAKE_BUILD_TYPE", "Release")
+        // Rust/cc always link with the release CRT (/MD) even in debug builds.
         .pipe(|config| {
+            if *TARGET_OS == "windows" {
+                config.profile("Release");
+                if cfg!(feature = "crt_static") {
+                    config.define("CMAKE_MSVC_RUNTIME_LIBRARY", "MultiThreaded");
+                } else {
+                    config.define("CMAKE_MSVC_RUNTIME_LIBRARY", "MultiThreadedDLL");
+                }
+            }
             config.define("MNN_WIN_RUNTIME_MT", CxxOption::CRT_STATIC.cmake_value());
             config.define("MNN_USE_THREAD_POOL", CxxOption::THREADPOOL.cmake_value());
             config.define("MNN_OPENMP", CxxOption::OPENMP.cmake_value());
@@ -644,7 +737,7 @@ impl CxxOption {
     pub const OPENCL: CxxOption = cxx_option_from_feature!("opencl", "MNN_OPENCL");
     pub const OPENMP: CxxOption = cxx_option_from_feature!("openmp", "MNN_OPENMP");
     pub const OPENGL: CxxOption = cxx_option_from_feature!("opengl", "MNN_OPENGL");
-    pub const CRT_STATIC: CxxOption = cxx_option_from_feature!("opengl", "MNN_WIN_RUNTIME_MT");
+    pub const CRT_STATIC: CxxOption = cxx_option_from_feature!("crt_static", "MNN_WIN_RUNTIME_MT");
     pub const THREADPOOL: CxxOption =
         cxx_option_from_feature!("mnn-threadpool", "MNN_USE_THREAD_POOL");
 

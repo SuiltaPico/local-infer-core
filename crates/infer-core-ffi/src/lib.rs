@@ -153,6 +153,8 @@ fn ocr_words_to_json(words: &[OcrWord], timings: &OcrTimings) -> Result<String, 
         "timings": {
             "init_ms": timings.init_ms,
             "predict_ms": timings.predict_ms,
+            "mnn_configured_backend": timings.mnn_configured_backend,
+            "mnn_session_backends": timings.mnn_session_backends,
         },
     });
     serde_json::to_string(&payload).map_err(|e| e.to_string())
@@ -175,10 +177,7 @@ pub extern "C" fn infer_core_version() -> *const c_char {
 #[no_mangle]
 pub extern "C" fn infer_runtime_backends_json(out_json: *mut *mut c_char) -> c_int {
     run(std::ptr::null_mut(), || {
-        let payload = serde_json::json!({
-            "backend": infer_core_lib::runtime::backend_kind(),
-            "available": infer_core_lib::runtime::available_backends(),
-        });
+        let payload = runtime_status_payload(&RuntimeConfig::default());
         let json = serde_json::to_string(&payload).map_err(|e| e.to_string())?;
         if !out_json.is_null() {
             unsafe {
@@ -186,6 +185,44 @@ pub extern "C" fn infer_runtime_backends_json(out_json: *mut *mut c_char) -> c_i
             }
         }
         Ok(())
+    })
+}
+
+/// JSON runtime status for a given config:
+/// `{ "backend", "available", "configured", "resolved_mnn_backend" }`.
+#[no_mangle]
+pub extern "C" fn infer_runtime_status_json(
+    runtime_config_json: *const c_char,
+    out_json: *mut *mut c_char,
+) -> c_int {
+    run(out_json, || {
+        let runtime_config = runtime_config_from_json_ptr(runtime_config_json)?;
+        let payload = runtime_status_payload(&runtime_config);
+        let json = serde_json::to_string(&payload).map_err(|e| e.to_string())?;
+        if !out_json.is_null() {
+            unsafe {
+                *out_json = string_to_raw(json);
+            }
+        }
+        Ok(())
+    })
+}
+
+fn runtime_status_payload(runtime_config: &RuntimeConfig) -> serde_json::Value {
+    serde_json::json!({
+        "backend": infer_core_lib::runtime::backend_kind(),
+        "available": infer_core_lib::runtime::available_backends(),
+        "configured": runtime_config,
+        "resolved_mnn_backend": if infer_core_lib::runtime::backend_kind() == "mnn" {
+            Some(runtime_config.resolved_mnn_backend())
+        } else {
+            None::<String>
+        },
+        "resolved_eps": if infer_core_lib::runtime::backend_kind() == "onnx" {
+            Some(runtime_config.resolved_eps())
+        } else {
+            None::<Vec<String>>
+        },
     })
 }
 
@@ -644,9 +681,12 @@ mod tests {
         let timings = OcrTimings {
             init_ms: 1.0,
             predict_ms: 2.0,
+            mnn_configured_backend: Some("vulkan".into()),
+            mnn_session_backends: vec!["vulkan".into()],
         };
         let json = ocr_words_to_json(&words, &timings).unwrap();
         assert!(json.contains("\"text\":\"hi\""));
         assert!(json.contains("\"init_ms\":1"));
+        assert!(json.contains("\"mnn_session_backends\""));
     }
 }

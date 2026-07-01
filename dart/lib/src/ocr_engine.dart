@@ -53,15 +53,27 @@ class OcrTimings {
   const OcrTimings({
     required this.initMs,
     required this.predictMs,
+    this.mnnConfiguredBackend,
+    this.mnnSessionBackends = const [],
   });
 
   final double initMs;
   final double predictMs;
+  final String? mnnConfiguredBackend;
+  final List<String> mnnSessionBackends;
+
+  String? get primaryMnnSessionBackend =>
+      mnnSessionBackends.isEmpty ? null : mnnSessionBackends.first;
 
   factory OcrTimings.fromJson(Map<String, dynamic> json) {
+    final rawBackends = json['mnn_session_backends'];
     return OcrTimings(
       initMs: (json['init_ms'] as num?)?.toDouble() ?? 0,
       predictMs: (json['predict_ms'] as num?)?.toDouble() ?? 0,
+      mnnConfiguredBackend: json['mnn_configured_backend']?.toString(),
+      mnnSessionBackends: rawBackends is List
+          ? rawBackends.map((e) => e.toString()).toList(growable: false)
+          : const [],
     );
   }
 }

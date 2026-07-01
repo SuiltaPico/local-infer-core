@@ -67,6 +67,10 @@ pub struct OcrWord {
 pub struct OcrTimings {
     pub init_ms: f64,
     pub predict_ms: f64,
+    /// Requested MNN backend (`RuntimeConfig`, after resolving `"auto"`).
+    pub mnn_configured_backend: Option<String>,
+    /// Backends reported by MNN for the OCR session (`getSessionInfo` / `BACKENDS`).
+    pub mnn_session_backends: Vec<String>,
 }
 
 #[cfg(feature = "backend-ort")]

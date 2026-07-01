@@ -21,6 +21,7 @@ final class _Bindings {
 
   late final InferCoreVersionFn _version;
   InferRuntimeBackendsJsonFn? _runtimeBackendsJsonFn;
+  InferRuntimeStatusJsonFn? _runtimeStatusJsonFn;
   late final InferStringFreeFn _stringFree;
   late final InferFloatsFreeFn _floatsFree;
   late final InferRegistryCreateFn _registryCreate;
@@ -43,6 +44,7 @@ final class _Bindings {
   void _initBundled() {
     _version = nativeInferCoreVersion;
     _runtimeBackendsJsonFn = nativeInferRuntimeBackendsJson;
+    _runtimeStatusJsonFn = nativeInferRuntimeStatusJson;
     _stringFree = nativeInferStringFree;
     _floatsFree = nativeInferFloatsFree;
     _registryCreate = nativeInferRegistryCreate;
@@ -69,6 +71,16 @@ final class _Bindings {
         return lib.lookupFunction<
             InferRuntimeBackendsJsonNative, InferRuntimeBackendsJsonFn>(
           'infer_runtime_backends_json',
+        );
+      } on Object {
+        return null;
+      }
+    }();
+    _runtimeStatusJsonFn = () {
+      try {
+        return lib.lookupFunction<
+            InferRuntimeStatusJsonNative, InferRuntimeStatusJsonFn>(
+          'infer_runtime_status_json',
         );
       } on Object {
         return null;
@@ -152,6 +164,9 @@ final class _Bindings {
   int Function(Pointer<Pointer<Utf8>>)? get _runtimeBackendsJsonFnOrNull =>
       _runtimeBackendsJsonFn;
 
+  int Function(Pointer<Utf8>, Pointer<Pointer<Utf8>>)?
+      get _runtimeStatusJsonFnOrNull => _runtimeStatusJsonFn;
+
   String get version => _version().toDartString();
 
   /// Returns JSON from native when supported; null on older libraries.
@@ -168,6 +183,25 @@ final class _Bindings {
     } finally {
       calloc.free(jsonPtr);
     }
+  }
+
+  /// Returns runtime status JSON for [runtimeConfigJson]; null when unsupported.
+  String? runtimeStatusJson(String runtimeConfigJson) {
+    final fn = _runtimeStatusJsonFnOrNull;
+    if (fn != null) {
+      final configPtr = runtimeConfigJson.toNativeUtf8();
+      final jsonPtr = calloc<Pointer<Utf8>>();
+      try {
+        final rc = fn(configPtr, jsonPtr);
+        if (rc == 0) {
+          return _takeOwnedString(jsonPtr.value);
+        }
+      } finally {
+        calloc.free(configPtr);
+        calloc.free(jsonPtr);
+      }
+    }
+    return runtimeBackendsJson();
   }
 
   Pointer<Void> createRegistry({

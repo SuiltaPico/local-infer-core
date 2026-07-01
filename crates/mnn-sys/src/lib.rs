@@ -1,3 +1,7 @@
+//! Rust FFI for [MNN](https://github.com/alibaba/MNN).
+//!
+//! Build and platform-specific linking (Windows prebuilt, Android, CMake) are documented in
+//! [BUILD.md](../BUILD.md) in this crate.
 use std::ffi::CStr;
 mod tracing;
 

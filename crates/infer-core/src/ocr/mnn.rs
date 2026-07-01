@@ -121,7 +121,10 @@ impl OcrEngine {
     }
 
     pub fn recognize_rgb_timed(&self, rgb: RgbImage) -> Result<(Vec<OcrWord>, OcrTimings)> {
-        let mut timings = OcrTimings::default();
+        let mut timings = OcrTimings {
+            mnn_configured_backend: Some(self.runtime_config.resolved_mnn_backend()),
+            ..OcrTimings::default()
+        };
         let (rgb, coord_scale) = resize_rgb_for_ocr(rgb, self.config.max_side);
 
         let key = format!(
@@ -146,6 +149,7 @@ impl OcrEngine {
             let det = MnnModel::load(&self.det, &self.runtime_config, "ocr-det")?;
             let rec = MnnModel::load(&self.rec, &self.runtime_config, "ocr-rec")?;
             let dict = load_dict(&self.dict)?;
+            timings.mnn_session_backends = det.session_backend_names();
             timings.init_ms = ms_since(init_start);
             *guard = Some(CachedOcr {
                 key,

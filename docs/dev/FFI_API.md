@@ -18,9 +18,12 @@
 | 函数 | 说明 |
 |------|------|
 | `const char* infer_core_version(void)` | 版本（静态，勿 free） |
-| `int infer_runtime_backends_json(char** out_json)` | `{"backend":"onnx\|mnn","available":[...]}` |
+| `int infer_runtime_backends_json(char** out_json)` | `{"backend":"onnx\|mnn","available":[...], ...}`（兼容旧客户端；字段同 status 默认 config） |
+| `int infer_runtime_status_json(const char* runtime_config_json, char** out_json)` | 给定 `RuntimeConfig` JSON，返回 `backend`、`available`、`configured`、`resolved_mnn_backend` / `resolved_eps` |
 | `void infer_string_free(char* s)` | 释放库分配的字符串 |
 | `void infer_floats_free(float* data, size_t len)` | 释放库分配的 float 数组 |
+
+`infer_runtime_status_json` 响应示例见 [RUNTIME_VISIBILITY.md](./RUNTIME_VISIBILITY.md)。
 
 ## 3. Registry
 
@@ -45,9 +48,16 @@
 ```json
 {
   "words": [{"text":"...", "bounds":{"x":0,"y":0,"width":10,"height":10}, "confidence":99.0}],
-  "timings": {"init_ms": 1.0, "predict_ms": 2.0}
+  "timings": {
+    "init_ms": 1.0,
+    "predict_ms": 2.0,
+    "mnn_configured_backend": "vulkan",
+    "mnn_session_backends": ["vulkan"]
+  }
 }
 ```
+
+MNN build 时 `timings` 含 `mnn_*` 字段；ORT build 仅 `init_ms` / `predict_ms`。详见 [RUNTIME_VISIBILITY.md](./RUNTIME_VISIBILITY.md)。
 
 ## 5. Embedding
 

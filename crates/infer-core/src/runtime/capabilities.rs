@@ -68,6 +68,35 @@ fn mnn_backend_available(ty: MNNForwardType) -> bool {
     unsafe { mnn_sys::mnn_backend_available(ty) != 0 }
 }
 
+/// Human-readable name for an MNN forward-type code (`getSessionInfo` / `BACKENDS`).
+#[cfg(feature = "backend-mnn")]
+pub fn forward_type_name(code: i32) -> &'static str {
+    use MNNForwardType::*;
+    match code {
+        x if x == MNN_FORWARD_CPU as i32 => "cpu",
+        x if x == MNN_FORWARD_CPU_EXTENSION as i32 => "cpu_extension",
+        x if x == MNN_FORWARD_OPENCL as i32 => "opencl",
+        x if x == MNN_FORWARD_VULKAN as i32 => "vulkan",
+        x if x == MNN_FORWARD_METAL as i32 => "metal",
+        x if x == MNN_FORWARD_CUDA as i32 => "cuda",
+        x if x == MNN_FORWARD_OPENGL as i32 => "opengl",
+        x if x == MNN_FORWARD_AUTO as i32 => "auto",
+        x if x == MNN_FORWARD_NN as i32 => "nnapi",
+        other => {
+            if other == 0 {
+                "unknown"
+            } else {
+                "unknown"
+            }
+        }
+    }
+}
+
+#[cfg(not(feature = "backend-mnn"))]
+pub fn forward_type_name(_code: i32) -> &'static str {
+    "unknown"
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

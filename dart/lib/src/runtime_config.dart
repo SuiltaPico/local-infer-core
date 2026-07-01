@@ -99,4 +99,14 @@ class RuntimeConfig {
       mnn: mnnJson is Map<String, dynamic> ? MnnConfig.fromJson(mnnJson) : null,
     );
   }
+
+  /// Client-side fallback when native status API is unavailable.
+  String resolvedMnnBackend(Set<String> availableBackends) {
+    final configured = mnn?.backend ?? 'cpu';
+    if (configured != 'auto') return configured;
+    for (final name in ['vulkan', 'opencl', 'metal', 'cuda']) {
+      if (availableBackends.contains(name)) return name;
+    }
+    return 'cpu';
+  }
 }

@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/infer-core", "crates/infer-core-ffi", "crates/mnn-sys"]
+members = ["crates/infer-core", "crates/infer-core-ffi", "crates/mnn", "crates/mnn-sys"]
 resolver = "2"
 
 [workspace.package]
@@ -8,4 +8,5 @@ license = "MIT"
 version = "0.1.0"
 
 [patch.crates-io]
+mnn = { path = "crates/mnn" }
 mnn-sys = { path = "crates/mnn-sys" }

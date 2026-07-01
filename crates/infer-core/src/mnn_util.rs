@@ -58,6 +58,16 @@ impl Drop for MnnModel {
 }
 
 impl MnnModel {
+    /// MNN forward types actually used by this session.
+    pub fn session_backend_names(&self) -> Vec<String> {
+        self.interpreter
+            .backends(&self.session)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|code| runtime::forward_type_name(code).to_string())
+            .collect()
+    }
+
     pub fn load(path: &Path, runtime_config: &RuntimeConfig, component: &str) -> Result<Self> {
         let mut interpreter =
             Interpreter::from_file(path).map_err(|e| map_err(component, e))?;
