@@ -67,6 +67,12 @@ pub struct OcrWord {
 pub struct OcrTimings {
     pub init_ms: f64,
     pub predict_ms: f64,
+    /// Text detection (det model + contour post-process).
+    pub det_ms: f64,
+    /// Text recognition (rec model, batched crops).
+    pub rec_ms: f64,
+    /// Word filtering and coordinate rescaling after rec.
+    pub post_ms: f64,
     /// Requested MNN backend (`RuntimeConfig`, after resolving `"auto"`).
     pub mnn_configured_backend: Option<String>,
     /// Backends reported by MNN for the OCR session (`getSessionInfo` / `BACKENDS`).

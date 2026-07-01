@@ -7,10 +7,19 @@ license.workspace = true
 
 [features]
 default = ["backend-ort"]
-# Type/manifest/runtime only — no ORT/MNN backend (for ui-extractor path dep).
+# Type/manifest/runtime only — no ORT/MNN backend (for ui-extractor git dep).
+# Heavy deps (image/resvg/rayon) are optional and enabled only by backend-* features.
 types-only = []
-backend-ort = ["dep:ort", "dep:oar-ocr", "ort-directml"]
-backend-mnn = ["dep:mnn", "dep:mnn-sys", "dep:imageproc"]
+backend-ort = [
+    "dep:ort",
+    "dep:oar-ocr",
+    "ort-directml",
+    "dep:image",
+    "dep:rayon",
+    "dep:resvg",
+    "dep:anyhow",
+]
+backend-mnn = ["dep:mnn", "dep:mnn-sys", "dep:imageproc", "dep:image", "dep:rayon"]
 ort-directml = ["ort/directml", "oar-ocr/directml"]
 ort-coreml = ["ort/coreml"]
 ort-cuda = ["ort/cuda"]
@@ -20,7 +29,7 @@ name = "infer_core_lib"
 crate-type = ["rlib"]
 
 [dependencies]
-image = "0.25"
+image = { version = "0.25", optional = true }
 imageproc = { version = "0.25", optional = true }
 mnn = { path = "../mnn", optional = true, features = ["opencl", "vulkan", "mnn-threadpool"] }
 mnn-sys = { path = "../mnn-sys", optional = true, features = ["opencl", "vulkan"] }
@@ -29,9 +38,9 @@ ort = { version = "2.0.0-rc.12", optional = true, default-features = false, feat
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
-rayon = "1.10"
-anyhow = "1"
-resvg = "0.47"
+rayon = { version = "1.10", optional = true }
+anyhow = { version = "1", optional = true }
+resvg = { version = "0.47", optional = true }
 
 [dev-dependencies]
 tempfile = "3"

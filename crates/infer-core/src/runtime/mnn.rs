@@ -1,4 +1,5 @@
 use mnn::schedule::{ForwardType, ScheduleConfig};
+use mnn::{BackendConfig, PrecisionMode};
 
 use super::RuntimeConfig;
 
@@ -10,6 +11,10 @@ pub fn schedule_config(config: &RuntimeConfig) -> ScheduleConfig {
     sc.set_backup_type(ForwardType::CPU);
     if let Some(n) = mnn_cfg.num_thread {
         sc.set_num_threads(n as i32);
+    }
+    if let Ok(precision) = mnn_cfg.precision.parse::<PrecisionMode>() {
+        let backend_config = BackendConfig::new().with_precision_mode(precision);
+        sc.set_backend_config(backend_config);
     }
     sc
 }

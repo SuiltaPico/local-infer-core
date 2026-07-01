@@ -53,12 +53,18 @@ class OcrTimings {
   const OcrTimings({
     required this.initMs,
     required this.predictMs,
+    this.detMs = 0,
+    this.recMs = 0,
+    this.postMs = 0,
     this.mnnConfiguredBackend,
     this.mnnSessionBackends = const [],
   });
 
   final double initMs;
   final double predictMs;
+  final double detMs;
+  final double recMs;
+  final double postMs;
   final String? mnnConfiguredBackend;
   final List<String> mnnSessionBackends;
 
@@ -70,6 +76,9 @@ class OcrTimings {
     return OcrTimings(
       initMs: (json['init_ms'] as num?)?.toDouble() ?? 0,
       predictMs: (json['predict_ms'] as num?)?.toDouble() ?? 0,
+      detMs: (json['det_ms'] as num?)?.toDouble() ?? 0,
+      recMs: (json['rec_ms'] as num?)?.toDouble() ?? 0,
+      postMs: (json['post_ms'] as num?)?.toDouble() ?? 0,
       mnnConfiguredBackend: json['mnn_configured_backend']?.toString(),
       mnnSessionBackends: rawBackends is List
           ? rawBackends.map((e) => e.toString()).toList(growable: false)
@@ -174,8 +183,15 @@ class LocalOcrEngine {
     return session;
   }
 
-  Future<String> plainText(Uint8List imageBytes) async {
-    final session = await openSession();
+  Future<String> plainText(
+    Uint8List imageBytes, {
+    double? minConfidence,
+    int? maxSide,
+  }) async {
+    final session = await openSession(
+      minConfidence: minConfidence,
+      maxSide: maxSide,
+    );
     try {
       return session.plainText(imageBytes);
     } finally {

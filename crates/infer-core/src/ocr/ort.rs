@@ -159,6 +159,8 @@ impl OcrEngine {
             .predict(vec![rgb])
             .map_err(|e| InferError::Ocr(e.to_string()))?;
         timings.predict_ms = ms_since(predict_start);
+        // ORT path runs det+rec inside oar_ocr; no native split available.
+        timings.rec_ms = timings.predict_ms;
 
         let Some(result) = results.into_iter().next() else {
             return Ok((vec![], timings));

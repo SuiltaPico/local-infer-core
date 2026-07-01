@@ -161,14 +161,17 @@ impl OcrEngine {
 
         let predict_start = Instant::now();
         let engine = guard.as_mut().expect("engine initialized");
+
+        let det_start = Instant::now();
         let boxes = detect_text_boxes(
             &mut engine.det,
             &rgb,
             self.config.max_side,
             &self.config.detection,
         )?;
+        timings.det_ms = ms_since(det_start);
 
-        let mut words = Vec::new();
+        let rec_start = Instant::now();
         let texts = recognize_crops_batch(
             &mut engine.rec,
             &engine.dict,
@@ -177,6 +180,10 @@ impl OcrEngine {
             self.rec_height,
             self.runtime_config.ocr_rec_batch(),
         )?;
+        timings.rec_ms = ms_since(rec_start);
+
+        let post_start = Instant::now();
+        let mut words = Vec::new();
         for (bbox, text) in boxes.into_iter().zip(texts) {
             if text.is_empty() {
                 continue;
@@ -191,6 +198,7 @@ impl OcrEngine {
                 confidence,
             });
         }
+        timings.post_ms = ms_since(post_start);
         timings.predict_ms = ms_since(predict_start);
 
         if coord_scale != 1.0 {
