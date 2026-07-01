@@ -150,6 +150,21 @@ INFER_CORE_API int32_t infer_icon_index_match_embedding(
     char **out_error);
 
 /*
+ * Batch match embeddings against icon index (one index scan for all queries).
+ * `embeddings` is row-major: count * dim floats.
+ * On success writes JSON array to *out_json and returns 0.
+ * JSON shape: [null, {"name":"...","score":0.91}, ...]
+ */
+INFER_CORE_API int32_t infer_icon_index_match_embeddings_batch(
+    InferIconIndex *index,
+    const float *embeddings,
+    size_t count,
+    size_t dim,
+    float min_cosine,
+    char **out_json,
+    char **out_error);
+
+/*
  * Top-k search for one embedding.
  * On success writes JSON array to *out_json and returns 0.
  * JSON shape: [{"name":"...","score":0.91}, ...]

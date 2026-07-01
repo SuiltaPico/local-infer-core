@@ -121,6 +121,30 @@ impl IconIndex {
         })
     }
 
+    /// Match many query embeddings in one pass over the index (better cache locality).
+    pub fn match_embeddings_batch(
+        &self,
+        queries: &[&[f32]],
+        min_cosine: f64,
+    ) -> Vec<Option<IconMatch>> {
+        self.index
+            .best_match_batch(queries)
+            .into_iter()
+            .map(|opt| {
+                opt.and_then(|(idx, score)| {
+                    if score < min_cosine {
+                        None
+                    } else {
+                        Some(IconMatch {
+                            name: self.index.names[idx].clone(),
+                            score,
+                        })
+                    }
+                })
+            })
+            .collect()
+    }
+
     pub fn search(&self, query: &[f32], top_k: usize) -> Vec<IconMatch> {
         self.index
             .top_k(query, top_k.max(1))
@@ -194,6 +218,43 @@ impl EmbeddingIndex {
             }
         }
         Some((best_idx, best_score))
+    }
+
+    /// Scan the index once and find the best match for each query.
+    pub fn best_match_batch(&self, queries: &[&[f32]]) -> Vec<Option<(usize, f64)>> {
+        let dim = self.dim as usize;
+        let n_queries = queries.len();
+        if n_queries == 0 {
+            return vec![];
+        }
+        if self.names.is_empty() {
+            return vec![None; n_queries];
+        }
+        if queries.iter().any(|q| q.len() != dim) {
+            return vec![None; n_queries];
+        }
+
+        let mut best_idx = vec![0usize; n_queries];
+        let mut best_score = vec![f64::NEG_INFINITY; n_queries];
+
+        for (i, _name) in self.names.iter().enumerate() {
+            let start = i * dim;
+            let codes = &self.codes[start..start + dim];
+            let scale = self.scales[i];
+            for (q_idx, query) in queries.iter().enumerate() {
+                let score = cosine_query_i8(query, codes, scale);
+                if score > best_score[q_idx] {
+                    best_score[q_idx] = score;
+                    best_idx[q_idx] = i;
+                }
+            }
+        }
+
+        best_idx
+            .into_iter()
+            .zip(best_score)
+            .map(|(idx, score)| Some((idx, score)))
+            .collect()
     }
 
     pub fn top_k(&self, query: &[f32], k: usize) -> Vec<(usize, f64)> {
@@ -551,6 +612,28 @@ mod tests {
         let (idx, score) = index.best_match(&query).unwrap();
         assert_eq!(idx, 0);
         assert!(score > 0.99);
+    }
+
+    #[test]
+    fn best_match_batch_matches_single_queries() {
+        let count = 64;
+        let mut names = Vec::with_capacity(count);
+        let mut vectors = Vec::with_capacity(count * EMBED_DIM);
+        for i in 0..count {
+            names.push(format!("icon-{i}"));
+            vectors.extend(unit_vector(i as f32 * 0.17 + 0.01));
+        }
+        let index = EmbeddingIndex::from_float_vectors(EMBED_DIM as u32, names, vectors).unwrap();
+
+        let queries: Vec<Vec<f32>> = (0..8).map(|i| unit_vector(i as f32 * 3.1 + 0.5)).collect();
+        let query_refs: Vec<&[f32]> = queries.iter().map(|q| q.as_slice()).collect();
+        let batch = index.best_match_batch(&query_refs);
+
+        assert_eq!(batch.len(), queries.len());
+        for (query, batch_hit) in queries.iter().zip(batch) {
+            let single = index.best_match(query).unwrap();
+            assert_eq!(batch_hit, Some(single));
+        }
     }
 
     #[test]

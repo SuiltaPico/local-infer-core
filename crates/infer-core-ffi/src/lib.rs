@@ -726,6 +726,49 @@ pub extern "C" fn infer_icon_index_match_embedding(
 }
 
 #[no_mangle]
+pub extern "C" fn infer_icon_index_match_embeddings_batch(
+    handle: *mut c_void,
+    embeddings: *const f32,
+    count: usize,
+    dim: usize,
+    min_cosine: f32,
+    out_json: *mut *mut c_char,
+    out_error: *mut *mut c_char,
+) -> c_int {
+    run(out_error, || {
+        let index = icon_index_handle(handle)?;
+        let expected_dim = index.index.embedding_index().dim as usize;
+        if dim != expected_dim {
+            return Err(format!(
+                "embedding dim mismatch: expected {expected_dim}, got {dim}"
+            ));
+        }
+        if count == 0 {
+            unsafe { write_out_json(out_json, "[]")? };
+            return Ok(());
+        }
+        let total = count
+            .checked_mul(dim)
+            .ok_or_else(|| "embedding count*dim overflow".to_string())?;
+        let flat = read_floats(embeddings, total)?;
+        let queries: Vec<&[f32]> = flat.chunks(dim).collect();
+        let matches = index
+            .index
+            .match_embeddings_batch(&queries, min_cosine as f64);
+        let json_hits: Vec<serde_json::Value> = matches
+            .into_iter()
+            .map(|m| match m {
+                Some(hit) => serde_json::json!({ "name": hit.name, "score": hit.score }),
+                None => serde_json::Value::Null,
+            })
+            .collect();
+        let json = serde_json::to_string(&json_hits).map_err(|e| e.to_string())?;
+        unsafe { write_out_json(out_json, &json)? };
+        Ok(())
+    })
+}
+
+#[no_mangle]
 pub extern "C" fn infer_icon_index_search(
     handle: *mut c_void,
     embedding: *const f32,
