@@ -9,7 +9,7 @@ use imageproc::contours::find_contours;
 use crate::error::{InferError, Result};
 use crate::manifest::Manifest;
 use crate::mnn_util::{self, MnnModel};
-use crate::runtime::RuntimeConfig;
+use crate::runtime::{OcrRecStrategy, RuntimeConfig};
 
 use super::{
     resize::resize_rgb_for_ocr, scale_bounds, OcrBounds, OcrConfig, OcrDetectionConfig, OcrTimings,
@@ -179,6 +179,7 @@ impl OcrEngine {
             &boxes,
             self.rec_height,
             self.runtime_config.ocr_rec_batch(),
+            self.runtime_config.ocr_rec_strategy(),
         )?;
         timings.rec_ms = ms_since(rec_start);
 
@@ -508,6 +509,21 @@ fn contour_aabb(points: &[imageproc::point::Point<u32>]) -> (u32, u32, u32, u32)
     (x0, y0, x1, y1)
 }
 
+fn rec_pad_width(width: u32, strategy: OcrRecStrategy) -> u32 {
+    match strategy {
+        OcrRecStrategy::None => width.max(1),
+        OcrRecStrategy::Bucketing => {
+            const BUCKETS: [u32; 6] = [64, 128, 256, 512, 1024, 2048];
+            BUCKETS
+                .iter()
+                .find(|&&b| b >= width)
+                .copied()
+                .unwrap_or(((width.max(1) + 63) / 64) * 64)
+        }
+        OcrRecStrategy::Unified => 1024,
+    }
+}
+
 fn recognize_crops_batch(
     model: &mut MnnModel,
     dict: &[String],
@@ -515,6 +531,7 @@ fn recognize_crops_batch(
     boxes: &[OcrBounds],
     rec_height: u32,
     batch_size: usize,
+    strategy: OcrRecStrategy,
 ) -> Result<Vec<String>> {
     let batch_size = batch_size.max(1);
     if boxes.is_empty() {
@@ -527,81 +544,122 @@ fn recognize_crops_batch(
     }
 
     let mut texts = vec![String::new(); boxes.len()];
-    for chunk_start in (0..crops.len()).step_by(batch_size) {
-        let chunk_end = (chunk_start + batch_size).min(crops.len());
-        let chunk = &crops[chunk_start..chunk_end];
-        let valid: Vec<(usize, &RgbImage)> = chunk
-            .iter()
-            .enumerate()
-            .filter_map(|(i, crop)| crop.as_ref().map(|img| (i, img)))
-            .collect();
-        if valid.is_empty() {
-            continue;
-        }
 
-        let pad_w = valid
-            .iter()
-            .map(|(_, img)| img.width())
-            .max()
-            .unwrap_or(1);
-        let batch_images: Vec<RgbImage> = valid.iter().map(|(_, img)| (*img).clone()).collect();
-        let batch_size = batch_images.len() as u16;
-
-        let input_name = model.input_name.clone();
-        let output_name = model.output_name.clone();
-
-        let mut input =
-            unsafe { model.interpreter.input_unresized::<f32>(&model.session, &input_name) }
-                .map_err(|e| mnn_util::map_err("ocr-rec", e))?;
-        model.interpreter.resize_tensor_by_nchw(
-            &mut input,
-            batch_size,
-            3,
-            rec_height as u16,
-            pad_w as u16,
-        );
-        drop(input);
-        model.interpreter.resize_session(&mut model.session);
-
-        let nchw = mnn_util::batch_rgb_to_nchw_rec(&batch_images, rec_height, pad_w);
-        let mut input = model
-            .interpreter
-            .input(&model.session, &input_name)
-            .map_err(|e| mnn_util::map_err("ocr-rec", e))?;
-        let mut host = input.create_host_tensor_from_device(false);
-        host.host_mut().copy_from_slice(&nchw);
-        input
-            .copy_from_host_tensor(&host)
-            .map_err(|e| mnn_util::map_err("ocr-rec", e))?;
-        drop(input);
-
-        model
-            .interpreter
-            .run_session(&model.session)
-            .map_err(|e| mnn_util::map_err("ocr-rec", e))?;
-
-        let logits = mnn_util::read_output_f32(
-            &model.interpreter,
-            &model.session,
-            &output_name,
-            "ocr-rec",
-        )?;
-        let output = model
-            .interpreter
-            .output(&model.session, &output_name)
-            .map_err(|e| mnn_util::map_err("ocr-rec", e))?;
-        let (batch, time_steps, num_classes) = ctc_dims_batch(&output);
-
-        for (j, (local_i, _)) in valid.iter().enumerate() {
-            let global_i = chunk_start + local_i;
-            if j >= batch {
+    if strategy == OcrRecStrategy::None {
+        for chunk_start in (0..crops.len()).step_by(batch_size) {
+            let chunk_end = (chunk_start + batch_size).min(crops.len());
+            let chunk = &crops[chunk_start..chunk_end];
+            let valid: Vec<(usize, &RgbImage)> = chunk
+                .iter()
+                .enumerate()
+                .filter_map(|(i, crop)| crop.as_ref().map(|img| (i, img)))
+                .collect();
+            if valid.is_empty() {
                 continue;
             }
-            let row = &logits[j * time_steps * num_classes..(j + 1) * time_steps * num_classes];
-            texts[global_i] = decode_ctc(row, time_steps, num_classes, dict);
+
+            let pad_w = valid
+                .iter()
+                .map(|(_, img)| img.width())
+                .max()
+                .unwrap_or(1);
+            let batch_images: Vec<RgbImage> =
+                valid.iter().map(|(_, img)| (*img).clone()).collect();
+            let decoded = run_rec_inference(model, dict, &batch_images, rec_height, pad_w)?;
+            for ((local_i, _), text) in valid.iter().zip(decoded) {
+                texts[chunk_start + local_i] = text;
+            }
+        }
+        return Ok(texts);
+    }
+
+    use std::collections::BTreeMap;
+    let mut groups: BTreeMap<u32, Vec<(usize, RgbImage)>> = BTreeMap::new();
+    for (global_i, crop) in crops.into_iter().enumerate() {
+        let Some(img) = crop else { continue };
+        let pad_w = rec_pad_width(img.width(), strategy);
+        groups.entry(pad_w).or_default().push((global_i, img));
+    }
+
+    for (pad_w, items) in groups {
+        for chunk in items.chunks(batch_size) {
+            let batch_images: Vec<RgbImage> = chunk.iter().map(|(_, img)| img.clone()).collect();
+            let decoded = run_rec_inference(model, dict, &batch_images, rec_height, pad_w)?;
+            for ((global_i, _), text) in chunk.iter().zip(decoded) {
+                texts[*global_i] = text;
+            }
         }
     }
 
+    Ok(texts)
+}
+
+fn run_rec_inference(
+    model: &mut MnnModel,
+    dict: &[String],
+    batch_images: &[RgbImage],
+    rec_height: u32,
+    pad_w: u32,
+) -> Result<Vec<String>> {
+    if batch_images.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let batch_size = batch_images.len() as u16;
+    let input_name = model.input_name.clone();
+    let output_name = model.output_name.clone();
+
+    let mut input =
+        unsafe { model.interpreter.input_unresized::<f32>(&model.session, &input_name) }
+            .map_err(|e| mnn_util::map_err("ocr-rec", e))?;
+    model.interpreter.resize_tensor_by_nchw(
+        &mut input,
+        batch_size,
+        3,
+        rec_height as u16,
+        pad_w as u16,
+    );
+    drop(input);
+    model.interpreter.resize_session(&mut model.session);
+
+    let nchw = mnn_util::batch_rgb_to_nchw_rec(batch_images, rec_height, pad_w);
+    let mut input = model
+        .interpreter
+        .input(&model.session, &input_name)
+        .map_err(|e| mnn_util::map_err("ocr-rec", e))?;
+    let mut host = input.create_host_tensor_from_device(false);
+    host.host_mut().copy_from_slice(&nchw);
+    input
+        .copy_from_host_tensor(&host)
+        .map_err(|e| mnn_util::map_err("ocr-rec", e))?;
+    drop(input);
+
+    model
+        .interpreter
+        .run_session(&model.session)
+        .map_err(|e| mnn_util::map_err("ocr-rec", e))?;
+
+    let logits = mnn_util::read_output_f32(
+        &model.interpreter,
+        &model.session,
+        &output_name,
+        "ocr-rec",
+    )?;
+    let output = model
+        .interpreter
+        .output(&model.session, &output_name)
+        .map_err(|e| mnn_util::map_err("ocr-rec", e))?;
+    let (batch, time_steps, num_classes) = ctc_dims_batch(&output);
+
+    let mut texts = Vec::with_capacity(batch_images.len());
+    for j in 0..batch_images.len() {
+        if j >= batch {
+            texts.push(String::new());
+            continue;
+        }
+        let row = &logits[j * time_steps * num_classes..(j + 1) * time_steps * num_classes];
+        texts.push(decode_ctc(row, time_steps, num_classes, dict));
+    }
     Ok(texts)
 }
 

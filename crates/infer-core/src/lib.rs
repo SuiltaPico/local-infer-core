@@ -47,4 +47,4 @@ pub use manifest::{LicenseInfo, Manifest};
 pub use ocr::{OcrBounds, OcrConfig, OcrDetectionConfig, OcrEngine, OcrTimings, OcrWord};
 #[cfg(not(feature = "types-only"))]
 pub use registry::Registry;
-pub use runtime::{BatchConfig, MnnConfig, OnnxConfig, RuntimeConfig};
+pub use runtime::{BatchConfig, MnnConfig, OnnxConfig, OcrRecStrategy, RuntimeConfig};

@@ -68,6 +68,7 @@ class BatchConfig {
   const BatchConfig({
     this.ocrRec = defaultOcrRecBatch,
     this.embed = defaultEmbedBatch,
+    this.ocrRecStrategy = OcrRecStrategy.none,
   });
 
   static const defaultOcrRecBatch = 8;
@@ -77,6 +78,7 @@ class BatchConfig {
 
   final int ocrRec;
   final int embed;
+  final OcrRecStrategy ocrRecStrategy;
 
   int get clampedOcrRec => ocrRec.clamp(minBatch, maxBatch);
   int get clampedEmbed => embed.clamp(minBatch, maxBatch);
@@ -84,20 +86,46 @@ class BatchConfig {
   Map<String, dynamic> toJson() => {
         'ocr_rec': ocrRec,
         'embed': embed,
+        'ocr_rec_strategy': ocrRecStrategy.name,
       };
 
   factory BatchConfig.fromJson(Map<String, dynamic> json) {
     return BatchConfig(
       ocrRec: _readBatch(json['ocr_rec'], defaultOcrRecBatch),
       embed: _readBatch(json['embed'], defaultEmbedBatch),
+      ocrRecStrategy: OcrRecStrategy.fromStored(
+          json['ocr_rec_strategy']?.toString()),
     );
   }
 
-  BatchConfig copyWith({int? ocrRec, int? embed}) {
+  BatchConfig copyWith({
+    int? ocrRec,
+    int? embed,
+    OcrRecStrategy? ocrRecStrategy,
+  }) {
     return BatchConfig(
       ocrRec: ocrRec ?? this.ocrRec,
       embed: embed ?? this.embed,
+      ocrRecStrategy: ocrRecStrategy ?? this.ocrRecStrategy,
     );
+  }
+}
+
+enum OcrRecStrategy {
+  none,
+  bucketing,
+  unified;
+
+  static OcrRecStrategy fromStored(String? value) {
+    switch (value) {
+      case 'bucketing':
+        return OcrRecStrategy.bucketing;
+      case 'unified':
+        return OcrRecStrategy.unified;
+      case 'none':
+      default:
+        return OcrRecStrategy.none;
+    }
   }
 }
 

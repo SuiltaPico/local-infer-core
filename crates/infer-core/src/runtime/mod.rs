@@ -23,6 +23,22 @@ pub struct BatchConfig {
     pub ocr_rec: u32,
     #[serde(default = "default_embed_batch")]
     pub embed: u32,
+    #[serde(default)]
+    pub ocr_rec_strategy: OcrRecStrategy,
+}
+
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum OcrRecStrategy {
+    None,
+    Bucketing,
+    Unified,
+}
+
+impl Default for OcrRecStrategy {
+    fn default() -> Self {
+        Self::None
+    }
 }
 
 impl Default for BatchConfig {
@@ -30,6 +46,7 @@ impl Default for BatchConfig {
         Self {
             ocr_rec: default_ocr_rec_batch(),
             embed: default_embed_batch(),
+            ocr_rec_strategy: OcrRecStrategy::default(),
         }
     }
 }
@@ -136,6 +153,10 @@ impl RuntimeConfig {
 
     pub fn ocr_rec_batch(&self) -> usize {
         self.batch_config().ocr_rec_batch()
+    }
+
+    pub fn ocr_rec_strategy(&self) -> OcrRecStrategy {
+        self.batch_config().ocr_rec_strategy
     }
 
     pub fn embed_batch(&self) -> usize {
@@ -256,11 +277,26 @@ mod tests {
             batch: BatchConfig {
                 ocr_rec: 0,
                 embed: 64,
+                ocr_rec_strategy: OcrRecStrategy::Bucketing,
             },
             ..Default::default()
         };
         assert_eq!(cfg.ocr_rec_batch(), 1);
         assert_eq!(cfg.embed_batch(), 32);
+        assert_eq!(cfg.ocr_rec_strategy(), OcrRecStrategy::Bucketing);
+    }
+
+    #[test]
+    fn ocr_rec_strategy_serializes_snake_case() {
+        let cfg = RuntimeConfig {
+            batch: BatchConfig {
+                ocr_rec_strategy: OcrRecStrategy::Unified,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let json = serde_json::to_string(&cfg).unwrap();
+        assert!(json.contains("\"ocr_rec_strategy\":\"unified\""));
     }
 
     #[test]
