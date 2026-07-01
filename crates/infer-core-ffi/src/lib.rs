@@ -206,7 +206,7 @@ pub extern "C" fn infer_runtime_status_json(
     runtime_config_json: *const c_char,
     out_json: *mut *mut c_char,
 ) -> c_int {
-    run(out_json, || {
+    run(std::ptr::null_mut(), || {
         let runtime_config = runtime_config_from_json_ptr(runtime_config_json)?;
         let payload = runtime_status_payload(&runtime_config);
         let json = serde_json::to_string(&payload).map_err(|e| e.to_string())?;
@@ -661,6 +661,19 @@ mod tests {
         let text = unsafe { CStr::from_ptr(out) }.to_str().unwrap();
         assert_eq!(text, r#"{"ok":true}"#);
         unsafe { infer_string_free(out) };
+    }
+
+    #[test]
+    fn runtime_status_json_returns_payload() {
+        let config = CString::new(r#"{"mnn":{"backend":"auto"}}"#).unwrap();
+        let mut json: *mut c_char = ptr::null_mut();
+        let rc = infer_runtime_status_json(config.as_ptr(), &mut json);
+        assert_eq!(rc, OK);
+        assert!(!json.is_null());
+        let text = unsafe { CStr::from_ptr(json) }.to_str().unwrap();
+        assert!(text.contains("\"available\""));
+        assert!(text.contains("\"configured\""));
+        unsafe { infer_string_free(json) };
     }
 
     #[test]

@@ -68,6 +68,18 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      # MNN source + arm64 prebuilts + locally built x86_64 libMNN.so live under
+      # third_party/mnn/ (gitignored). Cache avoids re-downloading and re-running
+      # the expensive CMake build for Android x86_64 on every release tag.
+      - name: Cache MNN Android artifacts
+        uses: actions/cache@v4
+        id: mnn-android-cache
+        with:
+          path: third_party/mnn
+          key: mnn-android-v1-${{ hashFiles('scripts/download_mnn_android.ps1', 'scripts/build_mnn_android_x86_64.ps1') }}-ndk-r27c-mnn-3.6.0
+          restore-keys: |
+            mnn-android-v1-
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@master
         with:
@@ -78,13 +90,25 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: release-android-rust-1.95
+          cache-workspace-crates: true
 
       - uses: nttld/setup-ndk@v1
         id: ndk
         with:
           ndk-version: r27c
 
+      - name: Cache cargo-ndk
+        id: cargo-ndk-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/cargo-ndk
+            ~/.cargo/.crates.toml
+            ~/.cargo/.crates2.json
+          key: cargo-ndk-v1-rust-1.95-locked
+
       - name: Install cargo-ndk
+        if: steps.cargo-ndk-cache.outputs.cache-hit != 'true'
         run: cargo install cargo-ndk --locked
 
       - name: Install cmake and ninja
