@@ -8,7 +8,7 @@ use std::ptr;
 use std::time::Instant;
 
 use image::{DynamicImage, RgbImage};
-use infer_core_lib::{EmbedEngine, IconIndex, OcrEngine, OcrTimings, OcrWord, Registry, RuntimeConfig};
+use infer_core_lib::{EmbedEngine, EmbedTimings, IconIndex, OcrEngine, OcrTimings, OcrWord, Registry, RuntimeConfig};
 
 const OK: c_int = 0;
 const ERR: c_int = -1;
@@ -589,12 +589,13 @@ pub extern "C" fn infer_embed_rgb256_batch(
     count: usize,
     out_count: *mut usize,
     out_dim: *mut usize,
+    out_timings_json: *mut *mut c_char,
     out_error: *mut *mut c_char,
 ) -> *mut f32 {
     let result = catch_unwind(AssertUnwindSafe(|| {
         let engine = embed_engine_handle(handle)?;
         if count == 0 {
-            return Ok(Vec::new());
+            return Ok((Vec::new(), EmbedTimings::default()));
         }
         let bytes = read_bytes(rgb_batch, rgb_len)?;
         let per_image = infer_core_lib::INPUT_SIZE as usize
@@ -621,16 +622,30 @@ pub extern "C" fn infer_embed_rgb256_batch(
             images.push(rgb);
         }
 
-        let embeddings = engine
+        engine
             .engine
-            .embed_rgb256_batch(&images)
-            .map_err(map_infer_error)?;
-        Ok(embeddings)
+            .embed_rgb256_batch_timed(&images)
+            .map_err(map_infer_error)
     }));
 
     match result {
-        Ok(Ok(embeddings)) => {
+        Ok(Ok((embeddings, timings))) => {
             clear_error(out_error);
+            if !out_timings_json.is_null() {
+                match serde_json::to_string(&timings) {
+                    Ok(json) => {
+                        if let Ok(cstr) = CString::new(json) {
+                            unsafe {
+                                *out_timings_json = cstr.into_raw();
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        set_error(out_error, e.to_string());
+                        return ptr::null_mut();
+                    }
+                }
+            }
             let dim = embeddings.first().map(|e| e.len()).unwrap_or(0);
             if !out_count.is_null() {
                 unsafe {

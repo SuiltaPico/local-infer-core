@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::time::Instant;
 
 use image::RgbImage;
 use ort::session::Session;
@@ -8,7 +9,7 @@ use crate::error::{InferError, Result};
 use crate::manifest::Manifest;
 use crate::runtime::{self, RuntimeConfig};
 
-use super::{finalize_embedding, rgb256_to_nchw, INPUT_SIZE};
+use super::{finalize_embedding, rgb256_to_nchw, EmbedTimings, INPUT_SIZE};
 
 pub struct EmbedEngine {
     session: Session,
@@ -68,14 +69,26 @@ impl EmbedEngine {
     }
 
     pub fn embed_rgb256_batch(&mut self, images: &[RgbImage]) -> Result<Vec<Vec<f32>>> {
+        Ok(self.embed_rgb256_batch_timed(images)?.0)
+    }
+
+    pub fn embed_rgb256_batch_timed(
+        &mut self,
+        images: &[RgbImage],
+    ) -> Result<(Vec<Vec<f32>>, EmbedTimings)> {
         let batch_size = self.runtime_config.embed_batch().max(1);
         let mut out = Vec::with_capacity(images.len());
+        let mut timings = EmbedTimings::default();
         for chunk in images.chunks(batch_size) {
+            let run_start = Instant::now();
             for rgb in chunk {
                 out.push(self.embed_rgb256(rgb)?);
             }
+            timings.run_session_ms += ms_since(run_start);
+            timings.batch_runs += 1;
         }
-        Ok(out)
+        timings.image_count = images.len() as u32;
+        Ok((out, timings))
     }
 
     pub fn embed_nchw(&mut self, nchw: &[f32]) -> Result<Vec<f32>> {
@@ -104,4 +117,8 @@ impl EmbedEngine {
 
         finalize_embedding(data.to_vec())
     }
+}
+
+fn ms_since(start: Instant) -> f64 {
+    start.elapsed().as_secs_f64() * 1000.0
 }

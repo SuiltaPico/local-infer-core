@@ -38,7 +38,7 @@ pub mod registry;
 pub mod runtime;
 
 #[cfg(not(feature = "types-only"))]
-pub use embed::{cosine, l2_normalize, EmbedEngine, EMBED_DIM, INPUT_SIZE};
+pub use embed::{cosine, l2_normalize, EmbedEngine, EmbedTimings, EMBED_DIM, INPUT_SIZE};
 pub use error::{InferError, Result};
 #[cfg(not(feature = "types-only"))]
 pub use icon_index::{EmbeddingIndex, IconIndex, IconMatch, IndexStorageFormat};

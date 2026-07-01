@@ -127,6 +127,7 @@ INFER_CORE_API float *infer_embed_rgb256_batch(
     size_t count,
     size_t *out_count,
     size_t *out_dim,
+    char **out_timings_json,
     char **out_error);
 
 INFER_CORE_API InferIconIndex *infer_icon_index_load(

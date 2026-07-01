@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::time::Instant;
 
 use image::RgbImage;
 
@@ -7,7 +8,7 @@ use crate::manifest::Manifest;
 use crate::mnn_util::{self, MnnModel};
 use crate::runtime::RuntimeConfig;
 
-use super::{finalize_embedding, INPUT_SIZE};
+use super::{finalize_embedding, EmbedTimings, INPUT_SIZE};
 
 pub struct EmbedEngine {
     model: MnnModel,
@@ -50,8 +51,15 @@ impl EmbedEngine {
     }
 
     pub fn embed_rgb256_batch(&mut self, images: &[RgbImage]) -> Result<Vec<Vec<f32>>> {
+        Ok(self.embed_rgb256_batch_timed(images)?.0)
+    }
+
+    pub fn embed_rgb256_batch_timed(
+        &mut self,
+        images: &[RgbImage],
+    ) -> Result<(Vec<Vec<f32>>, EmbedTimings)> {
         if images.is_empty() {
-            return Ok(Vec::new());
+            return Ok((Vec::new(), EmbedTimings::default()));
         }
         for rgb in images {
             if rgb.dimensions() != (INPUT_SIZE, INPUT_SIZE) {
@@ -66,11 +74,15 @@ impl EmbedEngine {
         }
 
         let mut out = Vec::with_capacity(images.len());
+        let mut timings = EmbedTimings::default();
         let batch_size = self.runtime_config.embed_batch();
         for chunk in images.chunks(batch_size) {
-            out.extend(run_embed_batch(&mut self.model, chunk)?);
+            let (partial, chunk_timings) = run_embed_batch(&mut self.model, chunk)?;
+            out.extend(partial);
+            timings.merge(&chunk_timings);
         }
-        Ok(out)
+        timings.image_count = images.len() as u32;
+        Ok((out, timings))
     }
 
     pub fn embed_nchw(&mut self, nchw: &[f32]) -> Result<Vec<f32>> {
@@ -111,13 +123,23 @@ impl EmbedEngine {
     }
 }
 
-fn run_embed_batch(model: &mut MnnModel, images: &[RgbImage]) -> Result<Vec<Vec<f32>>> {
+fn run_embed_batch(
+    model: &mut MnnModel,
+    images: &[RgbImage],
+) -> Result<(Vec<Vec<f32>>, EmbedTimings)> {
+    let mut timings = EmbedTimings {
+        batch_runs: 1,
+        image_count: images.len() as u32,
+        ..EmbedTimings::default()
+    };
+
     let batch_size = images.len() as u16;
     let h = INPUT_SIZE as u16;
     let w = INPUT_SIZE as u16;
     let input_name = model.input_name.clone();
     let output_name = model.output_name.clone();
 
+    let resize_start = Instant::now();
     let mut input =
         unsafe { model.interpreter.input_unresized::<f32>(&model.session, &input_name) }
             .map_err(|e| mnn_util::map_err("embed", e))?;
@@ -126,8 +148,13 @@ fn run_embed_batch(model: &mut MnnModel, images: &[RgbImage]) -> Result<Vec<Vec<
         .resize_tensor_by_nchw(&mut input, batch_size, 3, h, w);
     drop(input);
     model.interpreter.resize_session(&mut model.session);
+    timings.resize_ms = ms_since(resize_start);
 
+    let pack_start = Instant::now();
     let nchw = mnn_util::batch_rgb256_to_nchw(images, INPUT_SIZE);
+    timings.pack_nchw_ms = ms_since(pack_start);
+
+    let copy_start = Instant::now();
     let mut input = model
         .interpreter
         .input(&model.session, &input_name)
@@ -138,12 +165,16 @@ fn run_embed_batch(model: &mut MnnModel, images: &[RgbImage]) -> Result<Vec<Vec<
         .copy_from_host_tensor(&host)
         .map_err(|e| mnn_util::map_err("embed", e))?;
     drop(input);
+    timings.copy_input_ms = ms_since(copy_start);
 
+    let run_start = Instant::now();
     model
         .interpreter
         .run_session(&model.session)
         .map_err(|e| mnn_util::map_err("embed", e))?;
+    timings.run_session_ms = ms_since(run_start);
 
+    let read_start = Instant::now();
     let raw = mnn_util::read_output_f32(
         &model.interpreter,
         &model.session,
@@ -155,14 +186,18 @@ fn run_embed_batch(model: &mut MnnModel, images: &[RgbImage]) -> Result<Vec<Vec<
         .output(&model.session, &output_name)
         .map_err(|e| mnn_util::map_err("embed", e))?;
     let embed_dim = embed_output_dim(&output, raw.len(), images.len())?;
+    timings.read_output_ms = ms_since(read_start);
 
+    let finalize_start = Instant::now();
     let mut results = Vec::with_capacity(images.len());
     for i in 0..images.len() {
         let start = i * embed_dim;
         let end = start + embed_dim;
         results.push(finalize_embedding(raw[start..end].to_vec())?);
     }
-    Ok(results)
+    timings.finalize_ms = ms_since(finalize_start);
+
+    Ok((results, timings))
 }
 
 fn embed_output_dim(
@@ -184,6 +219,10 @@ fn embed_output_dim(
         )));
     }
     Ok(raw_len / batch)
+}
+
+fn ms_since(start: Instant) -> f64 {
+    start.elapsed().as_secs_f64() * 1000.0
 }
 
 #[cfg(test)]

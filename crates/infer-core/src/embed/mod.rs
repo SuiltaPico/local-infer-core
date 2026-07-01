@@ -3,6 +3,39 @@ pub mod preprocess;
 pub const INPUT_SIZE: u32 = 256;
 pub const EMBED_DIM: usize = 512;
 
+/// Per-stage timings for MobileCLIP embed batch inference (MNN/ONNX).
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct EmbedTimings {
+    /// `resize_tensor_by_nchw` + `resize_session` per batch chunk.
+    pub resize_ms: f64,
+    /// RGB HWC → NCHW float packing.
+    pub pack_nchw_ms: f64,
+    /// Host tensor upload (`copy_from_host_tensor`).
+    pub copy_input_ms: f64,
+    /// `run_session` forward pass.
+    pub run_session_ms: f64,
+    /// Output sync + host readback.
+    pub read_output_ms: f64,
+    /// L2 normalize per embedding vector.
+    pub finalize_ms: f64,
+    /// Number of batch chunks executed (`ceil(n / embed_batch)`).
+    pub batch_runs: u32,
+    /// Total images embedded in this call.
+    pub image_count: u32,
+}
+
+impl EmbedTimings {
+    pub fn merge(&mut self, other: &EmbedTimings) {
+        self.resize_ms += other.resize_ms;
+        self.pack_nchw_ms += other.pack_nchw_ms;
+        self.copy_input_ms += other.copy_input_ms;
+        self.run_session_ms += other.run_session_ms;
+        self.read_output_ms += other.read_output_ms;
+        self.finalize_ms += other.finalize_ms;
+        self.batch_runs += other.batch_runs;
+    }
+}
+
 /// Convert RGB 256×256 to NCHW float tensor in [0, 1].
 pub fn rgb256_to_nchw(rgb: &image::RgbImage) -> Vec<f32> {
     debug_assert_eq!(rgb.dimensions(), (INPUT_SIZE, INPUT_SIZE));
