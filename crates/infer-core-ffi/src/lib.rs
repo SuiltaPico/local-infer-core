@@ -50,6 +50,21 @@ fn string_to_raw(message: impl Into<String>) -> *mut c_char {
         .unwrap_or(ptr::null_mut())
 }
 
+unsafe fn write_out_json(out_json: *mut *mut c_char, json: &str) -> Result<(), String> {
+    if out_json.is_null() {
+        return Ok(());
+    }
+    let ptr = string_to_raw(json);
+    if ptr.is_null() {
+        return Err(format!(
+            "failed to allocate output JSON ({} bytes)",
+            json.len()
+        ));
+    }
+    *out_json = ptr;
+    Ok(())
+}
+
 fn read_cstr(c: *const c_char, label: &str) -> Result<&'static str, String> {
     if c.is_null() {
         return Err(format!("null {label}"));
@@ -179,11 +194,7 @@ pub extern "C" fn infer_runtime_backends_json(out_json: *mut *mut c_char) -> c_i
     run(std::ptr::null_mut(), || {
         let payload = runtime_status_payload(&RuntimeConfig::default());
         let json = serde_json::to_string(&payload).map_err(|e| e.to_string())?;
-        if !out_json.is_null() {
-            unsafe {
-                *out_json = string_to_raw(json);
-            }
-        }
+        unsafe { write_out_json(out_json, &json)? };
         Ok(())
     })
 }
@@ -199,11 +210,7 @@ pub extern "C" fn infer_runtime_status_json(
         let runtime_config = runtime_config_from_json_ptr(runtime_config_json)?;
         let payload = runtime_status_payload(&runtime_config);
         let json = serde_json::to_string(&payload).map_err(|e| e.to_string())?;
-        if !out_json.is_null() {
-            unsafe {
-                *out_json = string_to_raw(json);
-            }
-        }
+        unsafe { write_out_json(out_json, &json)? };
         Ok(())
     })
 }
@@ -278,7 +285,9 @@ pub extern "C" fn infer_registry_create(
 pub unsafe extern "C" fn infer_registry_destroy(handle: *mut c_void) {
     if !handle.is_null() {
         #[cfg(all(feature = "backend-mnn", not(feature = "backend-ort")))]
-        infer_core_lib::ocr::clear_engine_cache();
+        infer_core_lib::with_teardown_lock(|| {
+            infer_core_lib::ocr::clear_engine_cache();
+        });
         drop(Box::from_raw(handle as *mut RegistryHandle));
     }
 }
@@ -294,11 +303,7 @@ pub extern "C" fn infer_registry_pack_ids_json(
         let mut ids: Vec<&str> = registry.registry.pack_ids().collect();
         ids.sort_unstable();
         let json = serde_json::to_string(&ids).map_err(|e| e.to_string())?;
-        if !out_json.is_null() {
-            unsafe {
-                *out_json = string_to_raw(json);
-            }
-        }
+        unsafe { write_out_json(out_json, &json)? };
         Ok(())
     })
 }
@@ -315,11 +320,7 @@ pub extern "C" fn infer_registry_manifest_json(
         let pack_id = read_cstr(pack_id, "pack_id")?;
         let manifest = registry.registry.manifest(pack_id).map_err(map_infer_error)?;
         let json = serde_json::to_string(manifest).map_err(|e| e.to_string())?;
-        if !out_json.is_null() {
-            unsafe {
-                *out_json = string_to_raw(json);
-            }
-        }
+        unsafe { write_out_json(out_json, &json)? };
         Ok(())
     })
 }
@@ -396,11 +397,7 @@ pub extern "C" fn infer_ocr_recognize_timed(
             .recognize_timed(&img)
             .map_err(map_infer_error)?;
         let json = ocr_words_to_json(&words, &timings)?;
-        if !out_json.is_null() {
-            unsafe {
-                *out_json = string_to_raw(json);
-            }
-        }
+        unsafe { write_out_json(out_json, &json)? };
         Ok(())
     })
 }
@@ -470,6 +467,12 @@ pub extern "C" fn infer_embed_engine_load_path(
 #[no_mangle]
 pub unsafe extern "C" fn infer_embed_engine_destroy(handle: *mut c_void) {
     if !handle.is_null() {
+        #[cfg(all(feature = "backend-mnn", not(feature = "backend-ort")))]
+        infer_core_lib::with_teardown_lock(|| {
+            infer_core_lib::ocr::clear_engine_cache();
+            drop(Box::from_raw(handle as *mut EmbedEngineHandle));
+        });
+        #[cfg(not(all(feature = "backend-mnn", not(feature = "backend-ort"))))]
         drop(Box::from_raw(handle as *mut EmbedEngineHandle));
     }
 }
@@ -587,11 +590,7 @@ pub extern "C" fn infer_icon_index_match_embedding(
             .match_embedding(query, min_cosine as f64)
             .map(|m| serde_json::json!({ "name": m.name, "score": m.score }));
         let json = serde_json::to_string(&matched).map_err(|e| e.to_string())?;
-        if !out_json.is_null() {
-            unsafe {
-                *out_json = string_to_raw(json);
-            }
-        }
+        unsafe { write_out_json(out_json, &json)? };
         Ok(())
     })
 }
@@ -621,11 +620,7 @@ pub extern "C" fn infer_icon_index_search(
             .map(|m| serde_json::json!({ "name": m.name, "score": m.score }))
             .collect();
         let json = serde_json::to_string(&json_hits).map_err(|e| e.to_string())?;
-        if !out_json.is_null() {
-            unsafe {
-                *out_json = string_to_raw(json);
-            }
-        }
+        unsafe { write_out_json(out_json, &json)? };
         Ok(())
     })
 }
@@ -648,6 +643,24 @@ mod tests {
         let raw = string_to_raw("hello");
         assert!(!raw.is_null());
         unsafe { infer_string_free(raw) };
+    }
+
+    #[test]
+    fn write_out_json_rejects_interior_null() {
+        let mut out: *mut c_char = ptr::null_mut();
+        let err = unsafe { write_out_json(&mut out, "before\u{0}after") };
+        assert!(err.is_err());
+        assert!(out.is_null());
+    }
+
+    #[test]
+    fn write_out_json_success() {
+        let mut out: *mut c_char = ptr::null_mut();
+        unsafe { write_out_json(&mut out, r#"{"ok":true}"#) }.unwrap();
+        assert!(!out.is_null());
+        let text = unsafe { CStr::from_ptr(out) }.to_str().unwrap();
+        assert_eq!(text, r#"{"ok":true}"#);
+        unsafe { infer_string_free(out) };
     }
 
     #[test]

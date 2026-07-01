@@ -50,10 +50,10 @@ unsafe impl Sync for MnnModel {}
 
 impl Drop for MnnModel {
     fn drop(&mut self) {
-        unsafe {
+        crate::mnn_lifecycle::with_teardown_lock(|| unsafe {
             ManuallyDrop::drop(&mut self.session);
             ManuallyDrop::drop(&mut self.interpreter);
-        }
+        });
     }
 }
 

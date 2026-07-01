@@ -32,10 +32,13 @@ pub enum SessionInternals {
 impl Session {
     /// Calls the destroy function on the underlying MNN session.
     pub fn destroy(&mut self) {
+        if self.inner.is_null() {
+            return;
+        }
         unsafe {
             mnn_sys::Interpreter_releaseSession(self.net, self.inner);
         }
-        // unsafe { mnn_sys::Session_destroy(self.inner) }
+        self.inner = std::ptr::null_mut();
     }
 }
 

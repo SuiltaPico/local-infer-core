@@ -179,7 +179,7 @@ final class _Bindings {
       if (rc != 0) {
         return null;
       }
-      return _takeOwnedString(jsonPtr.value);
+      return _requireOwnedString(jsonPtr.value, 'runtimeBackendsJson');
     } finally {
       calloc.free(jsonPtr);
     }
@@ -194,7 +194,7 @@ final class _Bindings {
       try {
         final rc = fn(configPtr, jsonPtr);
         if (rc == 0) {
-          return _takeOwnedString(jsonPtr.value);
+          return _requireOwnedString(jsonPtr.value, 'runtimeStatusJson');
         }
       } finally {
         calloc.free(configPtr);
@@ -238,7 +238,7 @@ final class _Bindings {
       if (rc != 0) {
         throw LocalInferException(_takeOwnedString(errorPtr.value));
       }
-      return _takeOwnedString(jsonPtr.value);
+      return _requireOwnedString(jsonPtr.value, 'registryPackIdsJson');
     } finally {
       calloc.free(jsonPtr);
       calloc.free(errorPtr);
@@ -257,7 +257,7 @@ final class _Bindings {
       if (rc != 0) {
         throw LocalInferException(_takeOwnedString(errorPtr.value));
       }
-      return _takeOwnedString(jsonPtr.value);
+      return _requireOwnedString(jsonPtr.value, 'registryManifestJson');
     } finally {
       calloc.free(packPtr);
       calloc.free(jsonPtr);
@@ -321,7 +321,7 @@ final class _Bindings {
       if (rc != 0) {
         throw LocalInferException(_takeOwnedString(errorPtr.value));
       }
-      return _takeOwnedString(jsonPtr.value);
+      return _requireOwnedString(jsonPtr.value, 'ocrRecognizeTimed');
     } finally {
       calloc.free(dataPtr);
       calloc.free(jsonPtr);
@@ -435,7 +435,7 @@ final class _Bindings {
       if (rc != 0) {
         throw LocalInferException(_takeOwnedString(errorPtr.value));
       }
-      return _takeOwnedString(jsonPtr.value);
+      return _requireOwnedString(jsonPtr.value, 'iconIndexMatchEmbedding');
     } finally {
       calloc.free(embPtr);
       calloc.free(jsonPtr);
@@ -464,7 +464,7 @@ final class _Bindings {
       if (rc != 0) {
         throw LocalInferException(_takeOwnedString(errorPtr.value));
       }
-      return _takeOwnedString(jsonPtr.value);
+      return _requireOwnedString(jsonPtr.value, 'iconIndexSearch');
     } finally {
       calloc.free(embPtr);
       calloc.free(jsonPtr);
@@ -472,15 +472,27 @@ final class _Bindings {
     }
   }
 
-  String _takeOwnedString(Pointer<Utf8> ptr) {
+  String? _takeOwnedStringOrNull(Pointer<Utf8> ptr) {
     if (ptr == nullptr) {
-      return 'unknown native error';
+      return null;
     }
     try {
       return ptr.toDartString();
     } finally {
       _stringFree(ptr);
     }
+  }
+
+  String _requireOwnedString(Pointer<Utf8> ptr, String context) {
+    final value = _takeOwnedStringOrNull(ptr);
+    if (value == null) {
+      throw LocalInferException('native returned no JSON ($context)');
+    }
+    return value;
+  }
+
+  String _takeOwnedString(Pointer<Utf8> ptr) {
+    return _takeOwnedStringOrNull(ptr) ?? 'unknown native error';
   }
 }
 

@@ -18,7 +18,12 @@ compile_error!("enable either backend-ort or backend-mnn, not both");
 compile_error!("infer-core requires backend-ort, backend-mnn, or types-only feature");
 
 #[cfg(all(feature = "backend-mnn", not(feature = "types-only")))]
+mod mnn_lifecycle;
+#[cfg(all(feature = "backend-mnn", not(feature = "types-only")))]
 mod mnn_util;
+
+#[cfg(all(feature = "backend-mnn", not(feature = "types-only")))]
+pub use mnn_lifecycle::with_teardown_lock;
 
 #[cfg(not(feature = "types-only"))]
 pub mod embed;

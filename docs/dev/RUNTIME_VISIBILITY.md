@@ -159,7 +159,48 @@ Mauchat `LocalInferExecutionMode` 已映射为：
 
 `local-infer-core` 的 `resolved_mnn_backend()` 仅在 `backend == "auto"` 时做 GPU 优先级解析；Mauchat 当前「自动」直接写 `vulkan`，两者一致即可。
 
-## 5. 版本与兼容
+## 5. Android Vulkan 生命周期与已知风险
+
+### 5.1 现象
+
+在部分 Android 设备（如 OPPO + Vulkan）上，若 **多个 MNN GPU Session 交叉销毁**（OCR 静态缓存 det/rec + embed engine），可能出现：
+
+```
+pthread_mutex_lock called on a destroyed mutex
+  at Interpreter::releaseSession
+```
+
+根因：Vulkan 共享运行时被一个 engine 提前拆掉，另一 engine 的 Session 仍在 teardown。
+
+### 5.2 local-infer-core 侧缓解（v0.1.1+）
+
+| 机制 | 说明 |
+|------|------|
+| 全局 teardown 锁 | `with_teardown_lock` 串行化所有 `MnnModel::drop` |
+| embed 销毁前清 OCR 缓存 | `infer_embed_engine_destroy` 先 `clear_engine_cache()` 再 drop embed |
+| registry 销毁 | `infer_registry_destroy` 同样在 teardown 锁内清 OCR 缓存 |
+| Session 防双释放 | `releaseSession` 后将 session 指针置空 |
+
+### 5.3 宿主 App 建议 destroy 顺序
+
+宿主持有多个 native handle 时，建议 **先 OCR / registry，后 embed**；切换推理设备时 **invalidate registry 再 invalidate engine**：
+
+```
+1. infer_ocr_engine_destroy(ocr)     // 若有独立 OCR handle
+2. infer_registry_destroy(registry)  // 内部会 clear_engine_cache
+3. infer_embed_engine_destroy(embed) // 内部也会 clear_engine_cache + drop embed
+```
+
+切换 `RuntimeConfig` / 推理设备时：
+
+```
+LocalInferCache.invalidateRegistry()  // 先
+LocalInferCache.invalidateEngine()    // 后
+```
+
+> Vulkan GPU backend 在 Android 上仍属 **实验性**；若 teardown 锁后仍崩溃，见 P1b（GPU session 跳过 explicit release）或改用 CPU / OpenCL。
+
+## 6. 版本与兼容
 
 | local-infer-core 能力 | 最低 native 要求 |
 |----------------------|------------------|
@@ -169,7 +210,7 @@ Mauchat `LocalInferExecutionMode` 已映射为：
 
 Dart 侧对缺失字段应 **graceful degrade**（显示「需更新 infer_core」），已在 `OcrTimings.fromJson` / `tryLoadStatus` 中处理。
 
-## 6. 发布顺序建议
+## 7. 发布顺序建议
 
 1. 发布 **local-infer-core**（含 native + dart）新版本 tag
 2. Mauchat 升 ref + 改 benchmark / 设置页（P0）

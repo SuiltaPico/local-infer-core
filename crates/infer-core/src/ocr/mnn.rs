@@ -219,9 +219,11 @@ fn runtime_cache_key(config: &RuntimeConfig) -> String {
 
 /// Drop cached MNN OCR sessions (e.g. before switching inference backend).
 pub fn clear_engine_cache() {
-    if let Ok(mut guard) = engine_cache().lock() {
-        *guard = None;
-    }
+    crate::mnn_lifecycle::with_teardown_lock(|| {
+        if let Ok(mut guard) = engine_cache().lock() {
+            *guard = None;
+        }
+    });
 }
 
 fn load_dict(path: &Path) -> Result<Vec<String>> {
