@@ -134,4 +134,33 @@ impl Registry {
         }
         IconIndex::from_manifest(&entry.dir, &entry.manifest)
     }
+
+    /// Pre-compile typical MNN GPU kernels for embed + OCR and persist `.cache` files.
+    ///
+    /// No-op on CPU backend and when compiled without MNN.
+    pub fn warm_up_mnn_gpu(
+        &self,
+        ocr_pack_id: &str,
+        embed_pack_id: &str,
+        ocr_max_side: u32,
+    ) -> Result<()> {
+        #[cfg(all(feature = "backend-mnn", not(feature = "backend-ort")))]
+        {
+            let backend = self.runtime_config.resolved_mnn_backend();
+            if backend != "vulkan" && backend != "opencl" {
+                return Ok(());
+            }
+
+            let mut embed = self.load_embed(embed_pack_id)?;
+            embed.warm_up_mnn()?;
+
+            let ocr = self.load_ocr(ocr_pack_id)?;
+            ocr.warm_up_mnn(ocr_max_side)?;
+        }
+        #[cfg(not(all(feature = "backend-mnn", not(feature = "backend-ort"))))]
+        {
+            let _ = (ocr_pack_id, embed_pack_id, ocr_max_side);
+        }
+        Ok(())
+    }
 }

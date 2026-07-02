@@ -53,6 +53,17 @@ INFER_CORE_API int32_t infer_registry_manifest_json(
     char **out_json,
     char **out_error);
 
+/*
+ * Pre-compile typical MNN GPU kernels for embed + OCR and persist `.cache` files.
+ * No-op on CPU backend and when compiled without MNN.
+ */
+INFER_CORE_API int32_t infer_registry_warm_up_mnn_gpu(
+    InferRegistry *handle,
+    const char *ocr_pack_id,
+    const char *embed_pack_id,
+    uint32_t ocr_max_side,
+    char **out_error);
+
 INFER_CORE_API InferOcrEngine *infer_ocr_engine_load(
     InferRegistry *registry,
     const char *pack_id,

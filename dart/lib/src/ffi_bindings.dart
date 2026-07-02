@@ -28,6 +28,7 @@ final class _Bindings {
   late final InferRegistryDestroyFn _registryDestroy;
   late final InferRegistryPackIdsJsonFn _registryPackIdsJson;
   late final InferRegistryManifestJsonFn _registryManifestJson;
+  InferRegistryWarmUpMnnGpuFn? _registryWarmUpMnnGpu;
   late final InferOcrEngineLoadFn _ocrEngineLoad;
   late final InferOcrEngineDestroyFn _ocrEngineDestroy;
   late final InferOcrEngineApplyConfigFn _ocrEngineApplyConfig;
@@ -52,6 +53,7 @@ final class _Bindings {
     _registryDestroy = nativeInferRegistryDestroy;
     _registryPackIdsJson = nativeInferRegistryPackIdsJson;
     _registryManifestJson = nativeInferRegistryManifestJson;
+    _registryWarmUpMnnGpu = nativeInferRegistryWarmUpMnnGpu;
     _ocrEngineLoad = nativeInferOcrEngineLoad;
     _ocrEngineDestroy = nativeInferOcrEngineDestroy;
     _ocrEngineApplyConfig = nativeInferOcrEngineApplyConfig;
@@ -113,6 +115,16 @@ final class _Bindings {
         InferRegistryManifestJsonNative, InferRegistryManifestJsonFn>(
       'infer_registry_manifest_json',
     );
+    _registryWarmUpMnnGpu = () {
+      try {
+        return lib.lookupFunction<
+            InferRegistryWarmUpMnnGpuNative, InferRegistryWarmUpMnnGpuFn>(
+          'infer_registry_warm_up_mnn_gpu',
+        );
+      } on Object {
+        return null;
+      }
+    }();
     _ocrEngineLoad =
         lib.lookupFunction<InferOcrEngineLoadFn, InferOcrEngineLoadFn>(
       'infer_ocr_engine_load',
@@ -267,6 +279,31 @@ final class _Bindings {
     } finally {
       calloc.free(packPtr);
       calloc.free(jsonPtr);
+      calloc.free(errorPtr);
+    }
+  }
+
+  void registryWarmUpMnnGpu({
+    required Pointer<Void> registry,
+    required String ocrPackId,
+    required String embedPackId,
+    required int ocrMaxSide,
+  }) {
+    final fn = _registryWarmUpMnnGpu;
+    if (fn == null) {
+      return;
+    }
+    final ocrPtr = ocrPackId.toNativeUtf8();
+    final embedPtr = embedPackId.toNativeUtf8();
+    final errorPtr = calloc<Pointer<Utf8>>();
+    try {
+      final rc = fn(registry, ocrPtr, embedPtr, ocrMaxSide, errorPtr);
+      if (rc != 0) {
+        throw LocalInferException(_takeOwnedString(errorPtr.value));
+      }
+    } finally {
+      calloc.free(ocrPtr);
+      calloc.free(embedPtr);
       calloc.free(errorPtr);
     }
   }

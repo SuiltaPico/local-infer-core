@@ -350,6 +350,26 @@ pub extern "C" fn infer_registry_manifest_json(
     })
 }
 
+/// Pre-compile typical MNN GPU kernels for embed + OCR and persist `.cache` files.
+#[no_mangle]
+pub extern "C" fn infer_registry_warm_up_mnn_gpu(
+    handle: *mut c_void,
+    ocr_pack_id: *const c_char,
+    embed_pack_id: *const c_char,
+    ocr_max_side: u32,
+    out_error: *mut *mut c_char,
+) -> c_int {
+    run(out_error, || {
+        let registry = registry_handle(handle)?;
+        let ocr_pack_id = read_cstr(ocr_pack_id, "ocr_pack_id")?;
+        let embed_pack_id = read_cstr(embed_pack_id, "embed_pack_id")?;
+        registry
+            .registry
+            .warm_up_mnn_gpu(ocr_pack_id, embed_pack_id, ocr_max_side)
+            .map_err(map_infer_error)
+    })
+}
+
 #[no_mangle]
 pub extern "C" fn infer_ocr_engine_load(
     handle: *mut c_void,

@@ -71,6 +71,20 @@ class LocalInferRegistry {
     return (jsonDecode(jsonText) as Map).cast<String, dynamic>();
   }
 
+  /// Pre-compile MNN GPU kernels for embed + OCR; no-op on CPU / older native libs.
+  Future<void> warmUpMnnGpu({
+    required String ocrPackId,
+    required String embedPackId,
+    required int ocrMaxSide,
+  }) async {
+    nativeBindings.registryWarmUpMnnGpu(
+      registry: _handle,
+      ocrPackId: ocrPackId,
+      embedPackId: embedPackId,
+      ocrMaxSide: ocrMaxSide,
+    );
+  }
+
   void dispose() {
     nativeBindings.destroyRegistry(_handle);
   }

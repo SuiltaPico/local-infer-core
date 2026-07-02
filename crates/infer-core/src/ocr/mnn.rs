@@ -211,6 +211,50 @@ impl OcrEngine {
         }
         Ok((words, timings))
     }
+
+    /// Compile typical det/rec tensor shapes on GPU and persist MNN kernel cache.
+    pub fn warm_up_mnn(&self, max_side: u32) -> Result<()> {
+        let key = format!(
+            "{}|{}|{}|{}",
+            self.det.display(),
+            self.rec.display(),
+            self.dict.display(),
+            runtime_cache_key(&self.runtime_config),
+        );
+
+        let mut guard = engine_cache()
+            .lock()
+            .map_err(|e| InferError::Ocr(format!("OCR engine lock poisoned: {e}")))?;
+
+        let needs_rebuild = guard
+            .as_ref()
+            .map(|cached| cached.key != key)
+            .unwrap_or(true);
+
+        if needs_rebuild {
+            let det = MnnModel::load(&self.det, &self.runtime_config, "ocr-det")?;
+            let rec = MnnModel::load(&self.rec, &self.runtime_config, "ocr-rec")?;
+            let dict = load_dict(&self.dict)?;
+            *guard = Some(CachedOcr {
+                key,
+                det,
+                rec,
+                dict,
+            });
+        }
+
+        let engine = guard.as_mut().expect("engine initialized");
+        warm_up_det(&mut engine.det, max_side)?;
+        engine.det.persist_cache()?;
+
+        let batch = self.runtime_config.ocr_rec_batch().max(1);
+        for pad_w in rec_warmup_widths(self.runtime_config.ocr_rec_strategy()) {
+            warm_up_rec(&mut engine.rec, self.rec_height, pad_w, batch)?;
+        }
+        engine.rec.persist_cache()?;
+
+        Ok(())
+    }
 }
 
 struct CachedOcr {
@@ -524,6 +568,33 @@ fn rec_pad_width(width: u32, strategy: OcrRecStrategy) -> u32 {
         }
         OcrRecStrategy::Unified => 1024,
     }
+}
+
+fn rec_warmup_widths(strategy: OcrRecStrategy) -> Vec<u32> {
+    match strategy {
+        OcrRecStrategy::None => vec![64],
+        OcrRecStrategy::Bucketing => vec![64, 128, 256, 512, 1024, 2048],
+        OcrRecStrategy::Unified => vec![1024],
+    }
+}
+
+fn warm_up_det(model: &mut MnnModel, max_side: u32) -> Result<()> {
+    let side = max_side.max(DET_STRIDE);
+    let rgb = RgbImage::from_pixel(side, side, image::Rgb([114, 114, 114]));
+    let _ = detect_text_boxes(model, &rgb, max_side, &OcrDetectionConfig::default())?;
+    Ok(())
+}
+
+fn warm_up_rec(
+    model: &mut MnnModel,
+    rec_height: u32,
+    pad_w: u32,
+    batch_size: usize,
+) -> Result<()> {
+    let blank = RgbImage::from_pixel(pad_w.max(1), rec_height, image::Rgb([127, 127, 127]));
+    let images: Vec<RgbImage> = (0..batch_size).map(|_| blank.clone()).collect();
+    let _ = run_rec_inference(model, &[], &images, rec_height, pad_w.max(1))?;
+    Ok(())
 }
 
 fn recognize_crops_batch(

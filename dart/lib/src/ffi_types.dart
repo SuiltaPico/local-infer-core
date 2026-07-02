@@ -87,6 +87,21 @@ typedef InferRegistryManifestJsonFn = int Function(
   Pointer<Pointer<Utf8>>,
 );
 
+typedef InferRegistryWarmUpMnnGpuNative = Int32 Function(
+  Pointer<Void>,
+  Pointer<Utf8>,
+  Pointer<Utf8>,
+  Uint32,
+  Pointer<Pointer<Utf8>>,
+);
+typedef InferRegistryWarmUpMnnGpuFn = int Function(
+  Pointer<Void>,
+  Pointer<Utf8>,
+  Pointer<Utf8>,
+  int,
+  Pointer<Pointer<Utf8>>,
+);
+
 typedef InferOcrEngineApplyConfigNative = Int32 Function(
   Pointer<Void>,
   Float,

@@ -77,12 +77,22 @@ impl EmbedEngine {
         let mut timings = EmbedTimings::default();
         let batch_size = self.runtime_config.embed_batch();
         for chunk in images.chunks(batch_size) {
-            let (partial, chunk_timings) = run_embed_batch(&mut self.model, chunk)?;
+            let (partial, chunk_timings) =
+                run_embed_batch(&mut self.model, chunk, batch_size)?;
             out.extend(partial);
             timings.merge(&chunk_timings);
         }
         timings.image_count = images.len() as u32;
         Ok((out, timings))
+    }
+
+    /// Run one padded batch at the configured embed batch size and persist MNN cache.
+    pub fn warm_up_mnn(&mut self) -> Result<()> {
+        let batch_size = self.runtime_config.embed_batch();
+        let blank = blank_rgb256();
+        let images: Vec<RgbImage> = (0..batch_size).map(|_| blank.clone()).collect();
+        run_embed_batch(&mut self.model, &images, batch_size)?;
+        self.model.persist_cache()
     }
 
     pub fn embed_nchw(&mut self, nchw: &[f32]) -> Result<Vec<f32>> {
@@ -123,21 +133,39 @@ impl EmbedEngine {
     }
 }
 
+fn blank_rgb256() -> RgbImage {
+    image::RgbImage::from_pixel(INPUT_SIZE, INPUT_SIZE, image::Rgb([255, 255, 255]))
+}
+
 fn run_embed_batch(
     model: &mut MnnModel,
     images: &[RgbImage],
+    fixed_batch_size: usize,
 ) -> Result<(Vec<Vec<f32>>, EmbedTimings)> {
+    let real_count = images.len();
+    if real_count == 0 || real_count > fixed_batch_size {
+        return Err(InferError::Embed(format!(
+            "embed batch size {real_count} out of range for fixed batch {fixed_batch_size}"
+        )));
+    }
+
     let mut timings = EmbedTimings {
         batch_runs: 1,
-        image_count: images.len() as u32,
+        image_count: real_count as u32,
         ..EmbedTimings::default()
     };
 
-    let batch_size = images.len() as u16;
+    let batch_size = fixed_batch_size as u16;
     let h = INPUT_SIZE as u16;
     let w = INPUT_SIZE as u16;
     let input_name = model.input_name.clone();
     let output_name = model.output_name.clone();
+
+    let mut padded: Vec<RgbImage> = images.to_vec();
+    if padded.len() < fixed_batch_size {
+        let blank = blank_rgb256();
+        padded.extend((0..fixed_batch_size - real_count).map(|_| blank.clone()));
+    }
 
     let resize_start = Instant::now();
     let mut input =
@@ -151,7 +179,7 @@ fn run_embed_batch(
     timings.resize_ms = ms_since(resize_start);
 
     let pack_start = Instant::now();
-    let nchw = mnn_util::batch_rgb256_to_nchw(images, INPUT_SIZE);
+    let nchw = mnn_util::batch_rgb256_to_nchw(&padded, INPUT_SIZE);
     timings.pack_nchw_ms = ms_since(pack_start);
 
     let copy_start = Instant::now();
@@ -185,12 +213,12 @@ fn run_embed_batch(
         .interpreter
         .output(&model.session, &output_name)
         .map_err(|e| mnn_util::map_err("embed", e))?;
-    let embed_dim = embed_output_dim(&output, raw.len(), images.len())?;
+    let embed_dim = embed_output_dim(&output, raw.len(), fixed_batch_size)?;
     timings.read_output_ms = ms_since(read_start);
 
     let finalize_start = Instant::now();
-    let mut results = Vec::with_capacity(images.len());
-    for i in 0..images.len() {
+    let mut results = Vec::with_capacity(real_count);
+    for i in 0..real_count {
         let start = i * embed_dim;
         let end = start + embed_dim;
         results.push(finalize_embedding(raw[start..end].to_vec())?);

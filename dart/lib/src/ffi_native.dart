@@ -78,6 +78,18 @@ external int nativeInferRegistryManifestJson(
   Pointer<Pointer<Utf8>> errorOut,
 );
 
+@Native<InferRegistryWarmUpMnnGpuNative>(
+  assetId: nativeAssetId,
+  symbol: 'infer_registry_warm_up_mnn_gpu',
+)
+external int nativeInferRegistryWarmUpMnnGpu(
+  Pointer<Void> registry,
+  Pointer<Utf8> ocrPackId,
+  Pointer<Utf8> embedPackId,
+  int ocrMaxSide,
+  Pointer<Pointer<Utf8>> errorOut,
+);
+
 @Native<InferOcrEngineLoadFn>(
   assetId: nativeAssetId,
   symbol: 'infer_ocr_engine_load',

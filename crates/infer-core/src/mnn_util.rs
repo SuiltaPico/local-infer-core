@@ -87,6 +87,13 @@ impl MnnModel {
             output_name,
         })
     }
+
+    /// Persist compiled GPU kernels / session cache after warm-up inference.
+    pub fn persist_cache(&mut self) -> Result<()> {
+        self.interpreter
+            .update_cache_file(&mut self.session)
+            .map_err(|e| map_err("mnn", e))
+    }
 }
 
 /// Backend kernel cache path for an MNN model (`.mnn` → `.cache` beside the model).
